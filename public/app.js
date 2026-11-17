@@ -128,7 +128,9 @@ async function handleFiles(fileList, fromCamera) {
     const li = document.createElement('li');
     li.className = 'item';
     li.innerHTML = `<img alt=""><div class="meta"><div class="small">${esc(fmtTime(j.takenAt.toISOString()))}・${SRC_TEXT[j.timeSource]}</div><div>辨識中…</div></div>`;
-    $('img', li).src = URL.createObjectURL(j.file);
+    const img = $('img', li);
+    img.src = URL.createObjectURL(j.file);
+    img.dataset.src = img.src; // 上傳前先能放大看原圖
     $('#queue').prepend(li);
     return { ...j, li };
   });
@@ -161,6 +163,11 @@ async function uploadOne(job) {
     }
     meta.innerHTML = head + r.events.map(eventRow).join('');
     bindEventRows(meta);
+    // 上傳完成後改成顯示系統存下的照片（拍照的會有時間浮水印）
+    const img = $('img', job.li);
+    img.dataset.photo = r.photo;
+    delete img.dataset.src;
+    img.src = photoUrl(r.photo);
   } catch (err) {
     meta.innerHTML = `<div class="err">上傳失敗：${esc(err.message)}</div>`;
     const retry = document.createElement('button');
@@ -315,11 +322,15 @@ async function loadEvents() {
 
 // ---------- 點照片放大 ----------
 document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-photo]');
+  const el = e.target.closest('[data-photo], [data-src]');
   if (!el) return;
   e.preventDefault();
-  $('#photoDlg img').src = photoUrl(el.dataset.photo);
+  $('#photoDlg img').src = el.dataset.photo ? photoUrl(el.dataset.photo) : el.dataset.src;
   $('#photoDlg').showModal();
+});
+// 點照片本身或旁邊的暗處也能關閉
+$('#photoDlg').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') $('#photoDlg').close();
 });
 
 // ---------- 啟動 ----------
