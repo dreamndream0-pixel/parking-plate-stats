@@ -92,9 +92,9 @@ async function handleApi(req, res, url) {
   // 上傳照片 → AI 辨識 → 存事件
   if (url.pathname === '/api/upload' && req.method === 'POST') {
     const body = await readJson(req);
-    const { image, direction = 'auto', takenAt, timeSource = 'upload', filename = '', gate = '' } = body;
+    const { image, direction, takenAt, timeSource = 'upload', filename = '', gate = '' } = body;
     if (!image) return send(res, 400, { error: '沒有照片' });
-    if (!['in', 'out', 'auto'].includes(direction)) return send(res, 400, { error: '方向錯誤' });
+    if (!['in', 'out'].includes(direction)) return send(res, 400, { error: '請選擇進場或出場' });
     const t = takenAt && !Number.isNaN(Date.parse(takenAt)) ? new Date(takenAt).toISOString() : new Date().toISOString();
     const src = takenAt ? timeSource : 'upload';
 
@@ -149,7 +149,7 @@ async function handleApi(req, res, url) {
     const e = await store.getEvent(id);
     if (!e) return send(res, 404, { error: '找不到' });
     const plate = body.plate != null ? normalizePlate(body.plate) : e.plate;
-    const direction = ['in', 'out', 'auto'].includes(body.direction) ? body.direction : e.direction;
+    const direction = ['in', 'out'].includes(body.direction) ? body.direction : e.direction;
     const taken_at = body.takenAt && !Number.isNaN(Date.parse(body.takenAt)) ? new Date(body.takenAt).toISOString() : e.taken_at;
     if (!plate) return send(res, 400, { error: '車牌不能空白' });
     const fields = { plate, direction };

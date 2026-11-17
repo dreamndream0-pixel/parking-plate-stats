@@ -22,25 +22,30 @@
 <!-- 拍照上傳 -->
 <section id="tab-upload" class="panel">
   <div class="card">
-    <div class="label">這張照片是</div>
-    <div class="seg" id="dirSeg">
-      <button data-dir="in">進場</button>
-      <button data-dir="auto">自動判斷</button>
-      <button data-dir="out">出場</button>
+    <div class="label">📷 拍照（時間會印在照片上）</div>
+    <div class="actions two">
+      <label class="btn big in">
+        進場
+        <input class="camInput" data-dir="in" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn big out">
+        出場
+        <input class="camInput" data-dir="out" type="file" accept="image/*" capture="environment" hidden>
+      </label>
     </div>
-    <p class="hint" id="dirHint"></p>
 
-    <div class="actions">
-      <label class="btn primary big">
-        📷 拍照
-        <input id="camInput" type="file" accept="image/*" capture="environment" hidden>
+    <div class="label" style="margin-top:18px">🖼 從相簿選（可多張）</div>
+    <div class="actions two">
+      <label class="btn">
+        相簿・進場
+        <input class="pickInput" data-dir="in" type="file" accept="image/*" multiple hidden>
       </label>
-      <label class="btn big">
-        🖼 從相簿選（可多張）
-        <input id="pickInput" type="file" accept="image/*" multiple hidden>
+      <label class="btn">
+        相簿・出場
+        <input class="pickInput" data-dir="out" type="file" accept="image/*" multiple hidden>
       </label>
     </div>
-    <p class="hint">時間取自照片本身的拍攝時間（EXIF）；照片沒有時間資訊時，改用檔案時間或上傳時間，並會標示出來。</p>
+    <p class="hint">相簿照片的時間取自照片本身的拍攝時間；照片裡沒有時間時會標示警告，可到「照片紀錄」修正。</p>
   </div>
 
   <ul id="queue" class="queue"></ul>

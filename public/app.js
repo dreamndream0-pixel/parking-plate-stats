@@ -63,20 +63,7 @@ function showTab(name) {
 $$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
 // ---------- 方向 ----------
-const DIR_HINT = {
-  in: '在入口拍：全部記為進場。',
-  out: '在出口拍：全部記為出場。',
-  auto: '同一個出入口時使用：車子不在場內就算進場，已在場內就算出場。',
-};
-let direction = store.get('dir', 'auto');
-function setDir(d) {
-  direction = d;
-  store.set('dir', d);
-  $$('#dirSeg button').forEach((b) => b.classList.toggle('on', b.dataset.dir === d));
-  $('#dirHint').textContent = DIR_HINT[d];
-}
-$$('#dirSeg button').forEach((b) => b.addEventListener('click', () => setDir(b.dataset.dir)));
-setDir(direction);
+
 
 // ---------- 上傳 ----------
 // 縮圖到長邊 1440px 再上傳（省流量、AI 也看得清楚）；stampDate 有值時把時間印在右下角
@@ -109,7 +96,7 @@ function stampTime(g, w, h, d) {
   g.fillText(text, x, y);
 }
 
-async function handleFiles(fileList, fromCamera) {
+async function handleFiles(fileList, fromCamera, direction) {
   const files = [...fileList];
   if (!files.length) return;
   // 先讀每張的拍攝時間，再依時間排序上傳
@@ -178,8 +165,8 @@ async function uploadOne(job) {
   }
 }
 
-$('#camInput').addEventListener('change', (e) => { handleFiles(e.target.files, true); e.target.value = ''; });
-$('#pickInput').addEventListener('change', (e) => { handleFiles(e.target.files, false); e.target.value = ''; });
+$$('.camInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, true, inp.dataset.dir); e.target.value = ''; }));
+$$('.pickInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, false, inp.dataset.dir); e.target.value = ''; }));
 
 // 單筆事件：車牌（可改）、方向（可改）、時間、刪除
 function eventRow(e) {
@@ -192,9 +179,8 @@ function eventRow(e) {
     </div>
     <div class="inline small">
       <select aria-label="方向">
-        <option value="auto" ${e.direction === 'auto' ? 'selected' : ''}>自動</option>
-        <option value="in" ${e.direction === 'in' ? 'selected' : ''}>進場</option>
-        <option value="out" ${e.direction === 'out' ? 'selected' : ''}>出場</option>
+        <option value="in" ${resolved === 'in' ? 'selected' : ''}>進場</option>
+        <option value="out" ${resolved === 'out' ? 'selected' : ''}>出場</option>
       </select>
       ${e.vehicle ? esc(e.vehicle) : ''}
       ${e.ai_plate && e.ai_plate !== e.plate ? `・AI 原判：${esc(e.ai_plate)}` : ''}
