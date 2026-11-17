@@ -1,0 +1,18 @@
+# 營業時間（台灣 07:00–22:00）每 5 分鐘連一次網站，讓 Render 不休眠、Supabase 不被暫停。
+# 半夜不連，讓網站休眠以節省 Render 免費時數（整個工作區每月共用 750 小時）。
+# 要改營業時間：cron 用的是 UTC 時間，台灣時間減 8 小時。
+name: keep-awake
+
+on:
+  schedule:
+    - cron: '*/5 23 * * *'     # 台灣 07:00–07:55
+    - cron: '*/5 0-13 * * *'   # 台灣 08:00–21:55
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 連線網站
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://parking-plate-stats.onrender.com/api/health
