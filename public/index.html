@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>停車進出統計</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>停車進出統計</h1>
+  <span id="mockBadge" class="badge warn" hidden>模擬模式</span>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="upload" aria-selected="true">拍照上傳</button>
+  <button role="tab" data-tab="stats">統計</button>
+  <button role="tab" data-tab="events">照片紀錄</button>
+</nav>
+
+<!-- 拍照上傳 -->
+<section id="tab-upload" class="panel">
+  <div class="card">
+    <div class="label">這張照片是</div>
+    <div class="seg" id="dirSeg">
+      <button data-dir="in">進場</button>
+      <button data-dir="auto">自動判斷</button>
+      <button data-dir="out">出場</button>
+    </div>
+    <p class="hint" id="dirHint"></p>
+
+    <div class="actions">
+      <label class="btn primary big">
+        📷 拍照
+        <input id="camInput" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn big">
+        🖼 從相簿選（可多張）
+        <input id="pickInput" type="file" accept="image/*" multiple hidden>
+      </label>
+    </div>
+    <p class="hint">時間取自照片本身的拍攝時間（EXIF）；照片沒有時間資訊時，改用檔案時間或上傳時間，並會標示出來。</p>
+  </div>
+
+  <ul id="queue" class="queue"></ul>
+</section>
+
+<!-- 統計 -->
+<section id="tab-stats" class="panel" hidden>
+  <div class="card filters">
+    <div class="row">
+      <button class="btn sm" data-range="today">今天</button>
+      <button class="btn sm" data-range="yesterday">昨天</button>
+      <button class="btn sm" data-range="7d">近 7 天</button>
+      <button class="btn sm" data-range="all">全部</button>
+    </div>
+    <div class="row">
+      <input type="date" id="fromDate" aria-label="開始日期">
+      <span>到</span>
+      <input type="date" id="toDate" aria-label="結束日期">
+    </div>
+    <div class="row">
+      <input type="search" id="plateQ" placeholder="搜尋車牌" autocapitalize="characters">
+      <a class="btn sm" id="csvBtn" href="#">匯出 Excel (CSV)</a>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">進場</div><div class="v" id="kIn">–</div></div>
+    <div class="kpi"><div class="k">出場</div><div class="v" id="kOut">–</div></div>
+    <div class="kpi"><div class="k">目前在場</div><div class="v" id="kInside">–</div></div>
+    <div class="kpi"><div class="k">平均停留</div><div class="v" id="kAvg">–</div></div>
+  </div>
+  <p class="hint" id="anomaly"></p>
+
+  <div class="card">
+    <div class="label">每小時進出車次</div>
+    <div id="chart" class="chart"></div>
+    <div class="legend"><span class="sw in"></span>進場 <span class="sw out"></span>出場</div>
+  </div>
+
+  <div class="card">
+    <div class="label">停車紀錄（進場 ↔ 出場配對）</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>車牌</th><th>進場</th><th>出場</th><th>停留</th><th>狀態</th></tr></thead>
+        <tbody id="sessBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 照片紀錄 -->
+<section id="tab-events" class="panel" hidden>
+  <div class="card">
+    <div class="row">
+      <input type="date" id="evDate" aria-label="日期">
+      <input type="search" id="evQ" placeholder="搜尋車牌" autocapitalize="characters">
+    </div>
+    <p class="hint">AI 認錯的車牌可以直接修改；方向選「自動」時，系統依同一車牌的前後紀錄判斷進或出。</p>
+  </div>
+  <ul id="evList" class="events"></ul>
+</section>
+
+<dialog id="photoDlg"><img alt=""><form method="dialog"><button class="btn">關閉</button></form></dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

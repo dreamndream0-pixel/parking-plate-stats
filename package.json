@@ -1,0 +1,18 @@
+{
+  "name": "parking-plate-stats",
+  "version": "1.0.0",
+  "description": "停車場車牌進出統計：拍照上傳 → AI 辨識車牌 → 依照片時間配對進出場",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "mock": "node --env-file-if-exists=.env server.js --mock",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0"
+  }
+}
