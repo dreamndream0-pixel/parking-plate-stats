@@ -73,6 +73,17 @@ function csvCell(v) {
 
 // ---------- API ----------
 async function handleApi(req, res, url) {
+  // 給 UptimeRobot 定時連線：讓 Render 不休眠，也順便讀一下資料庫讓 Supabase 不被暫停（不需要密碼、不回傳任何資料）
+  if (url.pathname === '/api/health') {
+    try {
+      await store.ping();
+      return send(res, 200, { ok: true });
+    } catch (err) {
+      console.error('health check 失敗：', err);
+      return send(res, 503, { ok: false });
+    }
+  }
+
   if (!authorized(req, url) && url.pathname !== '/api/config') return send(res, 401, { error: '密碼錯誤' });
 
   // 前端設定
