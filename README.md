@@ -47,4 +47,4 @@ npm start                   # http://localhost:3000
 | `APP_PASSWORD` | 設了之後要輸入密碼才能使用 |
 | `SUPABASE_URL` / `SUPABASE_KEY` / `SUPABASE_APP_SECRET` | 設了就把資料存 Supabase；不設就存本機 `data/` |
 
-AI 模型用 `claude-opus-5-5`（effort: low），照片上傳前會縮到長邊 1600px 以節省費用。
+AI 先用 `claude-haiku-5-5` 辨識，信心度低於 0.8 或格式不對時改用 `claude-sonnet-5-5` 再看一次（effort: low）。照片上傳前縮到長邊 1280px。

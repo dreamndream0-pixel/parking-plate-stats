@@ -138,7 +138,7 @@ async function handleApi(req, res, url) {
     }
     const dirs = resolveDirections(await allEvents());
     const created = inserted.map((e) => ({ ...e, resolved: dirs.get(e.id) }));
-    return send(res, 200, { events: created, note: ai.note, takenAt: t, timeSource: src, photo });
+    return send(res, 200, { events: created, note: ai.note, model: ai.model, takenAt: t, timeSource: src, photo });
   }
 
   // 修改事件（改車牌 / 改方向 / 改時間）
