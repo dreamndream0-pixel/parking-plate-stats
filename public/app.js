@@ -66,8 +66,8 @@ $$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.da
 
 
 // ---------- 上傳 ----------
-// 縮圖到長邊 1440px 再上傳（省流量、AI 也看得清楚）；stampDate 有值時把時間印在右下角
-async function shrink(file, stampDate, max = 1440) {
+// 縮圖到長邊 1280px、JPEG 品質 0.7 再上傳：實測 1280 辨識結果與原圖相同，1024 以下遠景車牌開始讀錯；stampDate 有值時把時間印在右下角
+async function shrink(file, stampDate, max = 1280) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   if (!bmp) return { dataUrl: await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); }) };
   const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
@@ -78,7 +78,7 @@ async function shrink(file, stampDate, max = 1440) {
   g.drawImage(bmp, 0, 0, c.width, c.height);
   bmp.close?.();
   if (stampDate) stampTime(g, c.width, c.height, stampDate);
-  return { dataUrl: c.toDataURL('image/jpeg', 0.8) };
+  return { dataUrl: c.toDataURL('image/jpeg', 0.7) };
 }
 
 function stampTime(g, w, h, d) {
