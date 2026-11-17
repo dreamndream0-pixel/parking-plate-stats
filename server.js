@@ -101,10 +101,25 @@ async function handleApi(req, res, url) {
       return send(res, 502, { error: `AI 辨識失敗：${err.message}` });
     }
 
+    // 只記錄最主要（最近、最大）的那台車，背景停著的車不算
+    const main = ai.plates.slice(0, 1);
+
+    // 同一車牌 2 分鐘內已有紀錄 → 視為重複照片，不再記一次
+    const all = await allEvents();
+    const tMs = Date.parse(t);
+    const dup = main.length && all.find((e) => e.plate === main[0].plate && Math.abs(Date.parse(e.taken_at) - tMs) < 2 * 60 * 1000);
+    if (dup) {
+      return send(res, 200, {
+        events: [],
+        duplicate: `${main[0].plate} 在 ${new Date(dup.taken_at).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' })} 已經有紀錄，這張視為重複照片，沒有記錄`,
+        note: ai.note, takenAt: t, timeSource: src,
+      });
+    }
+
     // 有辨識到車牌才存照片，免得占用資料庫空間
-    if (ai.plates.length) await store.savePhoto(photo, buf);
+    if (main.length) await store.savePhoto(photo, buf);
     const inserted = [];
-    for (const p of ai.plates) {
+    for (const p of main) {
       inserted.push(await store.insertEvent({
         plate: p.plate, direction, taken_at: t, time_source: src, photo,
         confidence: p.confidence, vehicle: p.vehicle || '', ai_plate: p.plate, gate,

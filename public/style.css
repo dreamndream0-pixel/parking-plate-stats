@@ -113,3 +113,4 @@ dialog { border: 0; border-radius: var(--radius); padding: 8px; background: var(
 dialog img { max-width: 92vw; max-height: 80vh; display: block; border-radius: 8px; }
 dialog form { text-align: center; margin-top: 8px; }
 dialog::backdrop { background: rgb(0 0 0 / .6); }
+.warnbox { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 8px; }

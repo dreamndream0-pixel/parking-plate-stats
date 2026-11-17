@@ -79,17 +79,34 @@ $$('#dirSeg button').forEach((b) => b.addEventListener('click', () => setDir(b.d
 setDir(direction);
 
 // ---------- 上傳 ----------
-// 縮圖到長邊 1600px 再上傳（省流量、AI 也看得清楚）
-async function shrink(file, max = 1440) {
+// 縮圖到長邊 1440px 再上傳（省流量、AI 也看得清楚）；stampDate 有值時把時間印在右下角
+async function shrink(file, stampDate, max = 1440) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   if (!bmp) return { dataUrl: await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); }) };
   const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas');
   c.width = Math.round(bmp.width * scale);
   c.height = Math.round(bmp.height * scale);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const g = c.getContext('2d');
+  g.drawImage(bmp, 0, 0, c.width, c.height);
   bmp.close?.();
+  if (stampDate) stampTime(g, c.width, c.height, stampDate);
   return { dataUrl: c.toDataURL('image/jpeg', 0.8) };
+}
+
+function stampTime(g, w, h, d) {
+  const text = `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const size = Math.max(16, Math.round(Math.min(w, h) * 0.045));
+  g.font = `bold ${size}px ui-monospace, Menlo, Consolas, monospace`;
+  g.textBaseline = 'bottom';
+  const tw = g.measureText(text).width;
+  const pad_ = Math.round(size * 0.35);
+  const x = w - tw - pad_ * 3;
+  const y = h - pad_ * 2;
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(x - pad_, y - size - pad_ * 0.6, tw + pad_ * 2, size + pad_ * 1.4);
+  g.fillStyle = '#ffd400';
+  g.fillText(text, x, y);
 }
 
 async function handleFiles(fileList, fromCamera) {
@@ -97,13 +114,13 @@ async function handleFiles(fileList, fromCamera) {
   if (!files.length) return;
   // 先讀每張的拍攝時間，再依時間排序上傳
   const jobs = await Promise.all(files.map(async (file) => {
+    // 即時拍照：用按下拍照的這一刻，並把時間印在照片上
+    if (fromCamera) return { file, takenAt: new Date(), timeSource: 'camera', stamp: true, dir: direction };
+    // 從相簿選：用照片裡隱藏的拍攝時間（EXIF）
     const exif = await readExifDate(file);
-    let takenAt, timeSource;
-    if (exif) { takenAt = exif.date; timeSource = 'exif'; }
-    else if (fromCamera) { takenAt = new Date(); timeSource = 'camera'; } // 剛拍的照片：現在就是拍攝時間
-    else if (file.lastModified) { takenAt = new Date(file.lastModified); timeSource = 'file'; }
-    else { takenAt = new Date(); timeSource = 'upload'; }
-    return { file, takenAt, timeSource, dir: direction };
+    if (exif) return { file, takenAt: exif.date, timeSource: 'exif', dir: direction };
+    const takenAt = file.lastModified ? new Date(file.lastModified) : new Date();
+    return { file, takenAt, timeSource: file.lastModified ? 'file' : 'upload', dir: direction };
   }));
   jobs.sort((a, b) => a.takenAt - b.takenAt);
 
@@ -125,12 +142,19 @@ async function handleFiles(fileList, fromCamera) {
 async function uploadOne(job) {
   const meta = $('.meta', job.li);
   try {
-    const { dataUrl } = await shrink(job.file);
+    const { dataUrl } = await shrink(job.file, job.stamp ? job.takenAt : null);
     const r = await api('/api/upload', {
       method: 'POST',
       body: JSON.stringify({ image: dataUrl, direction: job.dir, takenAt: job.takenAt.toISOString(), timeSource: job.timeSource, filename: job.file.name }),
     });
-    const head = `<div class="small">${esc(fmtTime(r.takenAt))}・${SRC_TEXT[r.timeSource] || ''}</div>`;
+    let head = `<div class="small">${esc(fmtTime(r.takenAt))}・${SRC_TEXT[r.timeSource] || ''}</div>`;
+    if (r.timeSource === 'file' || r.timeSource === 'upload') {
+      head += `<div class="warnbox">⚠ 照片裡沒有拍攝時間，這是選取照片的時間，可能不準，請到「照片紀錄」修正</div>`;
+    }
+    if (r.duplicate) {
+      meta.innerHTML = `${head}<div class="small">${esc(r.duplicate)}</div>`;
+      return;
+    }
     if (!r.events.length) {
       meta.innerHTML = `${head}<div class="err">沒有辨識到車牌</div><div class="small">${esc(r.note)}</div>`;
       return;
