@@ -144,13 +144,26 @@ async function uploadOne(job) {
       meta.innerHTML = `${head}<div class="err">沒有辨識到車牌</div><div class="small">${esc(r.note)}</div>`;
       return;
     }
-    meta.innerHTML = head + r.events.map(eventRow).join('');
-    bindEventRows(meta);
+    const render = () => {
+      meta.innerHTML = head + r.events.map(eventRow).join('');
+      bindEventRows(meta);
+    };
+    render();
     // 上傳完成後改成顯示系統存下的照片（拍照的會有時間浮水印）
     const img = $('img', job.li);
     img.dataset.photo = r.photo;
     delete img.dataset.src;
     img.src = photoUrl(r.photo);
+    // 車子已在場內又拍了進場 → 跳通知問要不要改成出場
+    for (const e of r.events) {
+      if (e.resolved !== 'recheck') continue;
+      askRepeat(e, r.photo).then(async (toExit) => {
+        if (!toExit) return;
+        await api(`/api/events/${e.id}`, { method: 'PATCH', body: JSON.stringify({ direction: 'out' }) });
+        Object.assign(e, { direction: 'out', resolved: 'out', repeat: '已改為出場' });
+        render();
+      }).catch((err) => alert(err.message));
+    }
   } catch (err) {
     meta.innerHTML = `<div class="err">上傳失敗：${esc(err.message)}</div>`;
     const retry = document.createElement('button');
@@ -159,6 +172,26 @@ async function uploadOne(job) {
     retry.onclick = () => { meta.innerHTML = '<div>辨識中…</div>'; uploadOne(job); };
     meta.append(retry);
   }
+}
+
+// 「車號已在場內」通知：一次跳一個，多張時依序排隊
+let askChain = Promise.resolve();
+function askRepeat(e, photo) {
+  const ask = () => new Promise((resolve) => {
+    const dlg = $('#repeatDlg');
+    $('#repeatMsg').textContent = e.repeat || `${e.plate} 已在場內`;
+    $('#repeatPlate').textContent = e.plate;
+    $('#repeatImg').src = photoUrl(photo);
+    const done = (v) => { dlg.close(); resolve(v); };
+    $('#repeatToOut').onclick = () => done(true);
+    $('#repeatKeep').onclick = () => done(false);
+    dlg.oncancel = () => resolve(false);
+    dlg.showModal();
+    navigator.vibrate?.(200);
+  });
+  const p = askChain.then(ask);
+  askChain = p.catch(() => {});
+  return p;
 }
 
 $$('.camInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, true, inp.dataset.dir); e.target.value = ''; }));

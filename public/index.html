@@ -108,6 +108,18 @@
   <ul id="evList" class="events"></ul>
 </section>
 
+<dialog id="repeatDlg" class="repeat-dlg">
+  <div class="repeat-title">⚠ 車號已在場內</div>
+  <div class="plate" id="repeatPlate"></div>
+  <img id="repeatImg" alt="">
+  <p id="repeatMsg" class="small"></p>
+  <p>這台車要改為<strong>出場</strong>嗎？</p>
+  <div class="actions two">
+    <button class="btn big out" id="repeatToOut">改為出場</button>
+    <button class="btn big" id="repeatKeep">保留在場內</button>
+  </div>
+</dialog>
+
 <dialog id="photoDlg"><img alt=""><form method="dialog"><button class="btn">關閉</button></form></dialog>
 
 <script type="module" src="app.js"></script>
