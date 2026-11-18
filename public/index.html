@@ -17,6 +17,7 @@
   <button role="tab" data-tab="upload" aria-selected="true">拍照上傳</button>
   <button role="tab" data-tab="stats">統計</button>
   <button role="tab" data-tab="events">照片紀錄</button>
+  <button role="tab" data-tab="monthly">月租</button>
 </nav>
 
 <!-- 拍照上傳 -->
@@ -117,6 +118,40 @@
     <p class="hint">AI 認錯的車牌可以直接修改；方向選「自動」時，系統依同一車牌的前後紀錄判斷進或出。</p>
   </div>
   <ul id="evList" class="events"></ul>
+</section>
+
+<!-- 月租名單 -->
+<section id="tab-monthly" class="panel" hidden>
+  <div class="card">
+    <div class="label">月租名單（<span id="mCount">0</span> 筆）</div>
+    <p class="hint">比對方式：公告上的車號遮住中間 3 碼（例如 AQ***26）。系統把辨識到的車牌用同樣方式遮起來比對，相符就標「月租」。中間看不到，極少數情況會有不同車撞號，畫面會顯示名單上的姓名方便核對。</p>
+    <div class="actions two" style="margin-top:10px">
+      <label class="btn primary">
+        📷 拍名單讀取
+        <input id="mCam" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn">
+        🖼 相簿選名單照片
+        <input id="mPick" type="file" accept="image/*" multiple hidden>
+      </label>
+    </div>
+    <p class="hint">只會讀「中籤」名單，「候補」不算。讀完請核對，有錯直接改，再按「儲存名單」。名單換期時重新讀取並儲存即可（會取代舊名單）。</p>
+    <div id="mStatus" class="small"></div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table class="mtable">
+        <thead><tr><th>#</th><th>車號</th><th>姓名</th><th></th></tr></thead>
+        <tbody id="mBody"></tbody>
+      </table>
+    </div>
+    <div class="actions two" style="margin-top:10px">
+      <button class="btn" id="mAdd">＋ 新增一列</button>
+      <button class="btn big in" id="mSave">儲存名單</button>
+    </div>
+    <div id="mDirty" class="warnbox" hidden>名單有變更，還沒儲存</div>
+  </div>
 </section>
 
 <dialog id="repeatDlg" class="repeat-dlg">

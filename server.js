@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createStore } from './lib/store.js';
 import { pairSessions, resolveDirections, normalizePlate } from './lib/pairing.js';
 import { recognizePlates, mockRecognize } from './lib/recognize.js';
+import { buildMatcher, normalizeMask, readMonthlyList } from './lib/monthly.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(ROOT, 'data');
@@ -72,8 +73,12 @@ function csvCell(v) {
 }
 
 // 新增的紀錄是不是重複的：已在場內又記進場 → 確認在場；已出場又記出場 → 重複出場
+// 月租名單比對器（每次查詢重讀名單，名單很小）
+const monthlyMatcher = async () => buildMatcher(await store.listMonthly());
+
 async function describe(inserted) {
   const events = await allEvents();
+  const monthly = await monthlyMatcher();
   const dirs = resolveDirections(events);
   const sessions = pairSessions(events);
   const hhmm = (iso) => new Date(iso).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' });
@@ -87,7 +92,7 @@ async function describe(inserted) {
       const s = sessions.find((x) => x.repeat_exits.some((c) => c.id === e.id));
       repeat = `重複：${e.plate} 在 ${hhmm(s.exit_time)} 已出場`;
     }
-    return { ...e, resolved, repeat };
+    return { ...e, resolved, repeat, monthly: monthly(e.plate) };
   });
 }
 
@@ -151,6 +156,32 @@ async function handleApi(req, res, url) {
     const entered = events.filter((e) => e.gap_id === open.id && e.estimated_from).map((e) => e.plate);
     await store.updateGap(open.id, { audit_done: true });
     return send(res, 200, { gap: { ...open, audit_done: true }, entered: [...new Set(entered)], exited });
+  }
+
+  // ---------- 月租名單 ----------
+  if (url.pathname === '/api/monthly' && req.method === 'GET') {
+    return send(res, 200, { rows: await store.listMonthly() });
+  }
+  if (url.pathname === '/api/monthly' && req.method === 'PUT') {
+    const { rows = [] } = await readJson(req, 500_000);
+    const clean = rows
+      .map((r) => ({ mask: normalizeMask(r.mask), name: String(r.name || '').trim().slice(0, 30) }))
+      .filter((r) => r.mask);
+    await store.replaceMonthly(clean);
+    return send(res, 200, { rows: await store.listMonthly() });
+  }
+  // 拍公告上的名單 → AI 讀出車號（不會直接存，讓人確認後再按儲存）
+  if (url.pathname === '/api/monthly/read' && req.method === 'POST') {
+    const { image } = await readJson(req);
+    const m = String(image || '').match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+    if (!m) return send(res, 400, { error: '沒有照片' });
+    if (MOCK) return send(res, 200, { rows: [{ no: 1, name: '林O華', mask: 'AQ***26' }, { no: 2, name: '翁O宗', mask: 'AU***00' }], note: '模擬模式' });
+    try {
+      return send(res, 200, await readMonthlyList(m[2], m[1]));
+    } catch (err) {
+      console.error('名單辨識失敗：', err);
+      return send(res, 502, { error: `名單辨識失敗：${err.message}` });
+    }
   }
 
   // 上傳照片 → AI 辨識 → 存事件
@@ -244,9 +275,10 @@ async function handleApi(req, res, url) {
     const q = normalizePlate(url.searchParams.get('plate') || '');
     const events = await allEvents();
     const dirs = resolveDirections(events);
+    const monthly = await monthlyMatcher();
     const list = events
       .filter((e) => inRange(e.taken_at, from, to) && (!q || e.plate.includes(q)) && (!gapFilter || e.gap_id === gapFilter))
-      .map((e) => ({ ...e, resolved: dirs.get(e.id) }))
+      .map((e) => ({ ...e, resolved: dirs.get(e.id), monthly: monthly(e.plate) }))
       .reverse();
     return send(res, 200, { events: list });
   }
@@ -256,9 +288,12 @@ async function handleApi(req, res, url) {
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
     const q = normalizePlate(url.searchParams.get('plate') || '');
-    const sessions = pairSessions(await allEvents());
+    const monthly = await monthlyMatcher();
+    const sessions = pairSessions(await allEvents()).map((s) => ({ ...s, monthly: monthly(s.plate) }));
     const touches = (s) => (s.entry_time && inRange(s.entry_time, from, to)) || (s.exit_time && inRange(s.exit_time, from, to));
     const list = sessions.filter((s) => touches(s) && (!q || s.plate.includes(q)));
+    const entered = sessions.filter((s) => s.entry_time && inRange(s.entry_time, from, to));
+    const inside = sessions.filter((s) => s.status === 'inside');
 
     const entries = sessions.filter((s) => s.entry_time && inRange(s.entry_time, from, to)).length;
     const exits = sessions.filter((s) => s.exit_time && inRange(s.exit_time, from, to)).length;
@@ -279,6 +314,11 @@ async function handleApi(req, res, url) {
         // 員工離開期間推估的進出（時間不精確）
         estimatedEntries: sessions.filter((s) => s.entry_estimated_from && inRange(s.entry_time, from, to)).length,
         estimatedExits: sessions.filter((s) => s.exit_estimated_from && inRange(s.exit_time, from, to)).length,
+        // 月租／臨停（月租名單比對，中間 3 碼看不到，所以是「疑似月租」）
+        monthlyEntries: entered.filter((s) => s.monthly).length,
+        tempEntries: entered.filter((s) => !s.monthly).length,
+        monthlyInside: inside.filter((s) => s.monthly).length,
+        tempInside: inside.filter((s) => !s.monthly).length,
       },
       sessions: list,
     });
@@ -291,16 +331,18 @@ async function handleApi(req, res, url) {
     const tz = url.searchParams.get('tz') || 'Asia/Taipei';
     const fmt = (iso) => (iso ? new Date(iso).toLocaleString('zh-TW', { timeZone: tz, hour12: false }) : '');
     const statusText = { done: '已出場', inside: '在場內', missing_exit: '缺出場紀錄', missing_entry: '缺進場紀錄' };
+    const monthly = await monthlyMatcher();
     const rows = pairSessions(await allEvents()).filter(
       (s) => (s.entry_time && inRange(s.entry_time, from, to)) || (s.exit_time && inRange(s.exit_time, from, to))
     );
-    const lines = [['車牌', '進場時間', '出場時間', '停留(分鐘)', '狀態', '備註'].join(',')];
+    const lines = [['車牌', '類別', '月租名單', '進場時間', '出場時間', '停留(分鐘)', '狀態', '備註'].join(',')];
     for (const s of rows) {
       const note = [];
       if (s.entry_estimated_from) note.push(`員工離開期間進場：${fmt(s.entry_estimated_from)}～${fmt(s.entry_time)} 之間`);
       if (s.exit_estimated_from) note.push(`員工離開期間出場：${fmt(s.exit_estimated_from)}～${fmt(s.exit_time)} 之間`);
       if (s.checks.length) note.push(`重複拍 ${s.checks.length} 次`);
-      lines.push([s.plate, fmt(s.entry_time), fmt(s.exit_time), s.duration_min ?? '', statusText[s.status], note.join('；')].map(csvCell).join(','));
+      const mm = monthly(s.plate);
+      lines.push([s.plate, mm ? '月租' : '臨停', mm ? `${mm.mask} ${mm.names.join('/')}` : '', fmt(s.entry_time), fmt(s.exit_time), s.duration_min ?? '', statusText[s.status], note.join('；')].map(csvCell).join(','));
     }
     return send(res, 200, '﻿' + lines.join('\r\n'), {
       'Content-Type': 'text/csv; charset=utf-8',

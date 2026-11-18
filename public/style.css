@@ -119,6 +119,11 @@ dialog::backdrop { background: rgb(0 0 0 / .6); }
 .btn.in-soft { color: var(--in); border-color: var(--in); font-weight: 600; }
 .btn.out-soft { color: var(--out); border-color: var(--out); font-weight: 600; }
 .gapbar { display: grid; gap: 10px; }
+.mtable input { font: inherit; width: 100%; min-width: 90px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); }
+.mtable input.mask { font-family: ui-monospace, Consolas, monospace; text-transform: uppercase; }
+.mtable input.bad { border-color: var(--err); }
+.mtable td:first-child { color: var(--muted); }
+.tag.monthly { color: var(--accent); }
 .gapbar.away { background: var(--warn-bg); border-color: var(--warn); }
 .gapbar.audit { border: 2px solid var(--accent); }
 .gapbar .title { font-weight: 700; font-size: 17px; }

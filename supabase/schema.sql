@@ -75,3 +75,13 @@ create policy gaps_app on public.gaps for all to anon using (public.app_ok()) wi
 
 alter table public.events add column gap_id bigint references public.gaps(id) on delete set null;
 alter table public.events add column estimated_from timestamptz; -- 有值表示實際時間介於 estimated_from 和 taken_at 之間（空檔推估）
+
+-- 月租名單（公告上的遮蔽車號，例如 AQ***26）
+create table public.monthly (
+  id bigint generated always as identity primary key,
+  mask text not null,
+  name text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table public.monthly enable row level security;
+create policy monthly_app on public.monthly for all to anon using (public.app_ok()) with check (public.app_ok());

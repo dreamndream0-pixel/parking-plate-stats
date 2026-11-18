@@ -59,6 +59,7 @@ function showTab(name) {
   store.set('tab', name);
   if (name === 'stats') loadStats();
   if (name === 'events') loadEvents();
+  if (name === 'monthly') loadMonthly();
 }
 $$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -250,7 +251,7 @@ function eventRow(e) {
   return `<div class="ev" data-id="${e.id}">
     <div class="inline">
       <input class="plate-input" type="text" value="${esc(e.plate)}" aria-label="車牌">
-      <span class="tag ${cls}">${label}</span>${conf}
+      <span class="tag ${cls}">${label}</span>${conf}${monthlyTag(e.monthly)}
     </div>
     ${e.repeat ? `<div class="small">${esc(e.repeat)}</div>` : ''}
     ${est}
@@ -327,6 +328,7 @@ async function loadStats() {
   const repeats = data.sessions.reduce((n, x) => n + x.checks.filter((c) => inR(c.time)).length + x.repeat_exits.filter((c) => inR(c.time)).length, 0);
   $('#anomaly').textContent = `共 ${s.uniquePlates} 台車`
     + (repeats ? `；另有 ${repeats} 張重複拍的照片（不算進出場）` : '')
+    + `；進場中月租 ${s.monthlyEntries} 台、臨停 ${s.tempEntries} 台；目前在場月租 ${s.monthlyInside}、臨停 ${s.tempInside}`
     + (s.estimatedEntries || s.estimatedExits ? `；員工離開期間推估：進場 ${s.estimatedEntries} 台、出場 ${s.estimatedExits} 台（時間不精確）` : '')
     + (warn.length ? `；${warn.join('、')}（可能漏拍或車牌認錯，請到「照片紀錄」檢查）` : '');
   const hin = Array(24).fill(0), hout = Array(24).fill(0);
@@ -350,7 +352,7 @@ async function loadStats() {
     const last = x.checks?.[x.checks.length - 1];
     const checks = last ? `<div class="small">重複拍 ${x.checks.length} 次・最後 <a href="#" data-photo="${esc(last.photo)}">${esc(fmtTime(last.time).slice(6))}</a></div>` : '';
     return `<tr>
-      <td><span class="plate">${esc(x.plate)}</span></td>
+      <td><span class="plate">${esc(x.plate)}</span><div>${monthlyTag(x.monthly) || '<span class="small">臨停</span>'}</div></td>
       <td>${link(x.entry_time, x.entry_photo, x.entry_estimated_from)}${checks}</td>
       <td>${link(x.exit_time, x.exit_photo, x.exit_estimated_from)}</td>
       <td>${fmtDur(x.duration_min)}</td>
@@ -406,6 +408,90 @@ document.addEventListener('click', (e) => {
 // 點照片本身或旁邊的暗處也能關閉
 $('#photoDlg').addEventListener('click', (e) => {
   if (e.target.tagName !== 'BUTTON') $('#photoDlg').close();
+});
+
+// ---------- 月租名單 ----------
+function monthlyTag(m) {
+  if (!m) return '';
+  const who = m.names?.length ? `・${m.names.map(esc).join('/')}` : '';
+  return ` <span class="tag monthly" title="名單車號 ${esc(m.mask)}">月租${who}</span>`;
+}
+
+let mRows = []; // 編輯中的名單 { mask, name }
+let mDirty = false;
+const maskOk = (s) => /^[A-Z0-9]{2}\*{3}[A-Z0-9]{1,3}$/.test(s);
+
+function renderMonthly() {
+  $('#mCount').textContent = mRows.length;
+  $('#mDirty').hidden = !mDirty;
+  $('#mBody').innerHTML = mRows.map((r, i) => `<tr data-i="${i}">
+      <td>${i + 1}</td>
+      <td><input class="mask ${maskOk(r.mask) ? '' : 'bad'}" value="${esc(r.mask)}" placeholder="AQ***26" autocapitalize="characters"></td>
+      <td><input class="name" value="${esc(r.name)}" placeholder="姓名"></td>
+      <td><button class="btn sm" data-mdel="${i}" aria-label="刪除">✕</button></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="small">還沒有名單，請拍公告上的名單讀取</td></tr>';
+  $$('#mBody tr[data-i]').forEach((tr) => {
+    const r = mRows[Number(tr.dataset.i)];
+    $('input.mask', tr).addEventListener('input', (e) => {
+      r.mask = e.target.value.toUpperCase().replace(/[＊×]/g, '*').replace(/[^A-Z0-9*]/g, '');
+      e.target.classList.toggle('bad', !maskOk(r.mask));
+      setDirty();
+    });
+    $('input.name', tr).addEventListener('input', (e) => { r.name = e.target.value; setDirty(); });
+  });
+  $$('[data-mdel]').forEach((b) => b.addEventListener('click', () => { mRows.splice(Number(b.dataset.mdel), 1); mDirty = true; renderMonthly(); }));
+}
+function setDirty() { mDirty = true; $('#mDirty').hidden = false; }
+
+async function loadMonthly() {
+  if (mDirty) return renderMonthly(); // 有沒儲存的修改就不要覆蓋
+  try {
+    mRows = (await api('/api/monthly')).rows.map((r) => ({ mask: r.mask, name: r.name }));
+  } catch (err) {
+    $('#mStatus').textContent = err.message;
+  }
+  renderMonthly();
+}
+
+async function readListPhotos(files) {
+  files = [...files];
+  if (!files.length) return;
+  let added = 0;
+  const notes = [];
+  for (const [i, file] of files.entries()) {
+    $('#mStatus').textContent = `讀取名單中…（${i + 1}/${files.length}，每張約 20～40 秒）`;
+    try {
+      const { dataUrl } = await shrink(file, null, 2400); // 名單字小，用大一點的圖
+      const r = await api('/api/monthly/read', { method: 'POST', body: JSON.stringify({ image: dataUrl }) });
+      for (const row of r.rows) {
+        // 同車號同姓名的重複列（公告上有時會重複）只留一筆
+        if (mRows.some((x) => x.mask === row.mask && x.name === row.name)) continue;
+        mRows.push({ mask: row.mask, name: row.name });
+        added++;
+      }
+      if (r.note) notes.push(r.note);
+    } catch (err) {
+      notes.push(`第 ${i + 1} 張讀取失敗：${err.message}`);
+    }
+  }
+  mDirty = added > 0 || mDirty;
+  renderMonthly();
+  $('#mStatus').innerHTML = `新增 ${added} 筆，請核對後按「儲存名單」。${notes.length ? `<div class="warnbox">${notes.map(esc).join('<br>')}</div>` : ''}`;
+}
+$('#mCam').addEventListener('change', (e) => { readListPhotos(e.target.files); e.target.value = ''; });
+$('#mPick').addEventListener('change', (e) => { readListPhotos(e.target.files); e.target.value = ''; });
+$('#mAdd').addEventListener('click', () => { mRows.push({ mask: '', name: '' }); setDirty(); renderMonthly(); $$('#mBody input.mask').pop()?.focus(); });
+$('#mSave').addEventListener('click', async () => {
+  const bad = mRows.filter((r) => !maskOk(r.mask));
+  if (bad.length && !confirm(`有 ${bad.length} 筆車號格式不對（紅框），儲存時會被略過，確定儲存？`)) return;
+  try {
+    mRows = (await api('/api/monthly', { method: 'PUT', body: JSON.stringify({ rows: mRows }) })).rows.map((r) => ({ mask: r.mask, name: r.name }));
+    mDirty = false;
+    renderMonthly();
+    $('#mStatus').textContent = `已儲存 ${mRows.length} 筆，之後進場的車會自動比對。`;
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 // ---------- 員工暫時離開 → 回來盤點 ----------
