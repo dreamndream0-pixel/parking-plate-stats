@@ -707,8 +707,18 @@ function renderUsage(r) {
     $('#eDayLabel').textContent = '平均每天';
     $('#eNote').textContent = '這段期間沒有資料';
   }
-  $('#eDay').textContent = money(Math.round(perDay));
-  $('#eMonth').textContent = money(Math.round(perDay * 30));
+  // 月租：格數 × 月租費，每天 = 每月 / 30
+  const mCap = Number($('#mCap').value) || 0;
+  const mFee = Number($('#mFee').value) || 0;
+  const mMonth = mCap * mFee;
+  $('#eTempDay').textContent = money(Math.round(perDay));
+  $('#eTempMonth').textContent = money(Math.round(perDay * 30));
+  $('#eMLabel').textContent = `月租 ${mCap} 格`;
+  $('#eMDay').textContent = mFee ? money(Math.round(mMonth / 30)) : '未填';
+  $('#eMMonth').textContent = mFee ? money(mMonth) : '未填';
+  $('#eDay').textContent = money(Math.round(perDay + mMonth / 30));
+  $('#eMonth').textContent = money(Math.round(perDay * 30 + mMonth));
+  if (!mFee) $('#eNote').textContent = `${$('#eNote').textContent} 月租費還沒填，上面只算臨停。`.trim();
 
   // 使用率
   const top = days.reduce((a, d) => (!a || d.peak > a.peak ? d : a), null);
@@ -755,7 +765,13 @@ $$('[data-frange]').forEach((b) => b.addEventListener('click', () => setFeeRange
 $('#feeRate').value = store.get('feeRate', '15');
 $('#feeFree').value = store.get('feeFree', '15');
 $('#feeCap').value = store.get('feeCap', '92'); // 停車場共 92 格
-$('#feeCap').addEventListener('input', () => { store.set('feeCap', $('#feeCap').value); loadFees(); });
+$('#mCap').value = store.get('mCap', '35'); // 月租 35 格
+$('#mFee').value = store.get('mFee', '');
+['#feeCap', '#mCap', '#mFee'].forEach((s) => $(s).addEventListener('input', () => {
+  store.set(s.slice(1), $(s).value);
+  clearTimeout(feeTimer);
+  feeTimer = setTimeout(loadFees, 400);
+}));
 let feeTimer;
 ['#feeRate', '#feeFree'].forEach((s) => $(s).addEventListener('input', () => {
   store.set('feeRate', $('#feeRate').value);

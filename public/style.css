@@ -167,5 +167,8 @@ input.num { font: inherit; width: 4.5em; padding: 6px 8px; border: 1px solid var
 .chart.occ { position: relative; }
 .chart .b.occ { background: var(--accent); }
 .chart .capline { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--err); pointer-events: none; }
+input.num.wide { width: 6em; }
+table.split { margin-top: 12px; }
+table.split th:not(:first-child) { text-align: right; }
 td.money { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
 .btn.big.out { background: var(--out); border-color: var(--out); }
