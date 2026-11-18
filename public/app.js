@@ -754,7 +754,7 @@ $$('[data-frange]').forEach((b) => b.addEventListener('click', () => setFeeRange
 ['#feeFrom', '#feeTo'].forEach((s) => $(s).addEventListener('change', loadFees));
 $('#feeRate').value = store.get('feeRate', '15');
 $('#feeFree').value = store.get('feeFree', '15');
-$('#feeCap').value = store.get('feeCap', '');
+$('#feeCap').value = store.get('feeCap', '92'); // 停車場共 92 格
 $('#feeCap').addEventListener('input', () => { store.set('feeCap', $('#feeCap').value); loadFees(); });
 let feeTimer;
 ['#feeRate', '#feeFree'].forEach((s) => $(s).addEventListener('input', () => {
