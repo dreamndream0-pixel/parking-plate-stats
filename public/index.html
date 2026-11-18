@@ -35,12 +35,15 @@
   <div class="card" id="normalCard">
     <div class="label">📷 拍照（時間會印在照片上）</div>
     <div class="actions two">
-      <button class="btn big in camBtn" data-dir="in">進場</button>
-      <button class="btn big out camBtn" data-dir="out">出場</button>
+      <label class="btn big in">
+        進場
+        <input class="camInput" data-dir="in" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn big out">
+        出場
+        <input class="camInput" data-dir="out" type="file" accept="image/*" capture="environment" hidden>
+      </label>
     </div>
-    <!-- 備用：iPhone 內建相機（網頁相機打不開，或晚上要用原本相機時） -->
-    <input class="camInput" data-dir="in" type="file" accept="image/*" capture="environment" hidden>
-    <input class="camInput" data-dir="out" type="file" accept="image/*" capture="environment" hidden>
 
     <div class="label" style="margin-top:18px">🖼 從相簿選（可多張）</div>
     <div class="actions two">
@@ -278,32 +281,6 @@
     <button class="btn big" id="repeatKeep">保留在場內</button>
   </div>
 </dialog>
-
-<!-- 網頁相機：不閃光、可預設 2 倍、按一下就上傳、可連拍 -->
-<div id="cam" class="cam" hidden>
-  <div class="cam-top">
-    <span id="camDir" class="cam-dir">進場</span>
-    <span id="camCount" class="cam-count"></span>
-    <button id="camClose" class="cam-close">完成</button>
-  </div>
-  <div class="cam-view">
-    <video id="camVideo" playsinline muted autoplay></video>
-    <div id="camFlash" class="cam-flash"></div>
-    <div id="camMsg" class="cam-msg" hidden></div>
-    <div id="camZoomBadge" class="cam-zbadge" hidden></div>
-    <div id="camFocus" class="cam-focus" hidden></div>
-    <img id="camThumb" class="cam-thumb" alt="剛拍的照片" hidden>
-  </div>
-  <div class="cam-bottom">
-    <div class="cam-zoom" id="camZoom">
-      <button data-z="1">1×</button>
-      <button data-z="2">2×</button>
-      <button data-z="3">3×</button>
-    </div>
-    <button id="camShot" class="cam-shot" aria-label="拍照"></button>
-    <button id="camNative" class="cam-native">用 iPhone<br>相機</button>
-  </div>
-</div>
 
 <dialog id="photoDlg"><img alt=""><form method="dialog"><button class="btn">關閉</button></form></dialog>
 
