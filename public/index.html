@@ -21,7 +21,12 @@
 
 <!-- 拍照上傳 -->
 <section id="tab-upload" class="panel">
-  <div class="card">
+  <!-- 員工暫時離開 → 回來盤點 -->
+  <div class="card gapbar" id="gapBar"></div>
+  <input id="auditCam" type="file" accept="image/*" capture="environment" hidden>
+  <input id="auditPick" type="file" accept="image/*" multiple hidden>
+
+  <div class="card" id="normalCard">
     <div class="label">📷 拍照（時間會印在照片上）</div>
     <div class="actions two">
       <label class="btn big in">

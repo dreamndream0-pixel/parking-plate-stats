@@ -44,7 +44,7 @@ const dayStartIso = (ymd) => new Date(`${ymd}T00:00:00`).toISOString();
 const dayEndIso = (ymd) => { const d = new Date(`${ymd}T00:00:00`); d.setDate(d.getDate() + 1); return d.toISOString(); };
 const toLocalInput = (iso) => { const d = new Date(iso); return `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
 
-const SRC_TEXT = { exif: '照片時間', camera: '拍照當下', file: '檔案時間', upload: '上傳時間', manual: '手動修改' };
+const SRC_TEXT = { gap: '系統推估', exif: '照片時間', camera: '拍照當下', file: '檔案時間', upload: '上傳時間', manual: '手動修改' };
 const STATUS = {
   done: ['已出場', ''],
   inside: ['在場內', 'in'],
@@ -96,18 +96,18 @@ function stampTime(g, w, h, d) {
   g.fillText(text, x, y);
 }
 
-async function handleFiles(fileList, fromCamera, direction) {
+async function handleFiles(fileList, fromCamera, direction, gapId = null) {
   const files = [...fileList];
   if (!files.length) return;
   // 先讀每張的拍攝時間，再依時間排序上傳
   const jobs = await Promise.all(files.map(async (file) => {
     // 即時拍照：用按下拍照的這一刻，並把時間印在照片上
-    if (fromCamera) return { file, takenAt: new Date(), timeSource: 'camera', stamp: true, dir: direction };
+    if (fromCamera) return { file, takenAt: new Date(), timeSource: 'camera', stamp: true, dir: direction, gapId };
     // 從相簿選：用照片裡隱藏的拍攝時間（EXIF）
     const exif = await readExifDate(file);
-    if (exif) return { file, takenAt: exif.date, timeSource: 'exif', dir: direction };
+    if (exif) return { file, takenAt: exif.date, timeSource: 'exif', dir: direction, gapId };
     const takenAt = file.lastModified ? new Date(file.lastModified) : new Date();
-    return { file, takenAt, timeSource: file.lastModified ? 'file' : 'upload', dir: direction };
+    return { file, takenAt, timeSource: file.lastModified ? 'file' : 'upload', dir: direction, gapId };
   }));
   jobs.sort((a, b) => a.takenAt - b.takenAt);
 
@@ -134,7 +134,7 @@ async function uploadOne(job) {
     const { dataUrl } = await shrink(job.file, job.stamp ? job.takenAt : null);
     const r = await api('/api/upload', {
       method: 'POST',
-      body: JSON.stringify({ image: dataUrl, direction: job.dir, takenAt: job.takenAt.toISOString(), timeSource: job.timeSource, filename: job.file.name }),
+      body: JSON.stringify({ image: dataUrl, direction: job.dir, takenAt: job.takenAt.toISOString(), timeSource: job.timeSource, filename: job.file.name, gapId: job.gapId }),
     });
     let head = `<div class="small">${esc(fmtTime(r.takenAt))}・${SRC_TEXT[r.timeSource] || ''}</div>`;
     if (r.timeSource === 'file' || r.timeSource === 'upload') {
@@ -154,9 +154,10 @@ async function uploadOne(job) {
     img.dataset.photo = r.photo;
     delete img.dataset.src;
     img.src = photoUrl(r.photo);
+    if (job.gapId) { auditCount += r.events.length; renderGap(); }
     // 車子已在場內又拍了進場 → 跳通知問要不要改成出場
     for (const e of r.events) {
-      if (e.resolved !== 'recheck') continue;
+      if (e.resolved !== 'recheck' || job.gapId) continue;
       askRepeat(e, r.photo).then(async (toExit) => {
         if (!toExit) return;
         await api(`/api/events/${e.id}`, { method: 'PATCH', body: JSON.stringify({ direction: 'out' }) });
@@ -210,12 +211,16 @@ function eventRow(e) {
   // 下拉選單顯示照片原本是按「進場」還是「出場」拍的
   const dir = e.direction === 'out' || (e.direction === 'auto' && (resolved === 'out' || resolved === 'repeat_out')) ? 'out' : 'in';
   const conf = e.confidence != null && e.confidence < 0.8 ? ' <span class="tag warn">請確認</span>' : '';
+  const est = e.estimated_from
+    ? `<div class="small"><span class="tag est">員工離開期間</span> 實際${cls === 'out' ? '出場' : '進場'}時間在 ${esc(fmtTime(e.estimated_from))}～${esc(fmtTime(e.taken_at))} 之間</div>`
+    : '';
   return `<div class="ev" data-id="${e.id}">
     <div class="inline">
       <input class="plate-input" type="text" value="${esc(e.plate)}" aria-label="車牌">
       <span class="tag ${cls}">${label}</span>${conf}
     </div>
     ${e.repeat ? `<div class="small">${esc(e.repeat)}</div>` : ''}
+    ${est}
     <div class="inline small">
       <select aria-label="方向">
         <option value="in" ${dir === 'in' ? 'selected' : ''}>進場</option>
@@ -289,6 +294,7 @@ async function loadStats() {
   const repeats = data.sessions.reduce((n, x) => n + x.checks.filter((c) => inR(c.time)).length + x.repeat_exits.filter((c) => inR(c.time)).length, 0);
   $('#anomaly').textContent = `共 ${s.uniquePlates} 台車`
     + (repeats ? `；另有 ${repeats} 張重複拍的照片（不算進出場）` : '')
+    + (s.estimatedEntries || s.estimatedExits ? `；員工離開期間推估：進場 ${s.estimatedEntries} 台、出場 ${s.estimatedExits} 台（時間不精確）` : '')
     + (warn.length ? `；${warn.join('、')}（可能漏拍或車牌認錯，請到「照片紀錄」檢查）` : '');
   const hin = Array(24).fill(0), hout = Array(24).fill(0);
   for (const x of data.sessions) {
@@ -302,14 +308,18 @@ async function loadStats() {
 
   $('#sessBody').innerHTML = data.sessions.map((x) => {
     const [txt, cls] = STATUS[x.status];
-    const link = (iso, photo) => (iso ? `<a href="#" data-photo="${esc(photo)}">${esc(fmtTime(iso))}</a>` : '—');
+    const link = (iso, photo, estFrom) => {
+      if (!iso) return '—';
+      if (estFrom) return `<span class="tag est">推估</span> ${esc(fmtTime(estFrom))}<br>～${photo ? `<a href="#" data-photo="${esc(photo)}">${esc(fmtTime(iso).slice(6))}</a>` : esc(fmtTime(iso).slice(6))}`;
+      return photo ? `<a href="#" data-photo="${esc(photo)}">${esc(fmtTime(iso))}</a>` : esc(fmtTime(iso));
+    };
     // 在場內重複拍到的次數，最後一次可點開看照片
     const last = x.checks?.[x.checks.length - 1];
     const checks = last ? `<div class="small">重複拍 ${x.checks.length} 次・最後 <a href="#" data-photo="${esc(last.photo)}">${esc(fmtTime(last.time).slice(6))}</a></div>` : '';
     return `<tr>
       <td><span class="plate">${esc(x.plate)}</span></td>
-      <td>${link(x.entry_time, x.entry_photo)}${checks}</td>
-      <td>${link(x.exit_time, x.exit_photo)}</td>
+      <td>${link(x.entry_time, x.entry_photo, x.entry_estimated_from)}${checks}</td>
+      <td>${link(x.exit_time, x.exit_photo, x.exit_estimated_from)}</td>
       <td>${fmtDur(x.duration_min)}</td>
       <td><span class="tag ${cls}">${txt}</span></td>
     </tr>`;
@@ -330,7 +340,7 @@ async function loadEvents() {
   const { events } = await api(`/api/events?${p}`);
   const list = $('#evList');
   list.innerHTML = events.map((e) => `<li class="item">
-      <img src="${esc(photoUrl(e.photo))}" data-photo="${esc(e.photo)}" alt="" loading="lazy">
+      ${e.photo ? `<img src="${esc(photoUrl(e.photo))}" data-photo="${esc(e.photo)}" alt="" loading="lazy">` : '<div class="nophoto">盤點時<br>沒拍到</div>'}
       <div class="meta">
         <div class="inline small">
           <input type="datetime-local" step="1" value="${toLocalInput(e.taken_at)}" data-time="${e.id}" aria-label="拍攝時間">
@@ -365,7 +375,98 @@ $('#photoDlg').addEventListener('click', (e) => {
   if (e.target.tagName !== 'BUTTON') $('#photoDlg').close();
 });
 
+// ---------- 員工暫時離開 → 回來盤點 ----------
+// 狀態：沒有離開（gap = null）→ 離開中（沒有 end_at）→ 盤點中（有 end_at）→ 完成（顯示結果）
+let gap = null;
+let auditCount = 0;
+let gapResult = null;
+
+const since = (iso) => {
+  const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  return min < 60 ? `${min} 分鐘` : `${Math.floor(min / 60)} 小時 ${min % 60} 分`;
+};
+
+function renderGap() {
+  const bar = $('#gapBar');
+  bar.className = 'card gapbar';
+  if (gapResult) {
+    const list = (a) => (a.length ? a.map(esc).join('、') : '無');
+    bar.innerHTML = `<div class="title">✔ 盤點完成</div>
+      <div>員工離開期間<b>進場</b> ${gapResult.entered.length} 台：${list(gapResult.entered)}</div>
+      <div>員工離開期間<b>出場</b> ${gapResult.exited.length} 台：${list(gapResult.exited)}</div>
+      <div class="small">這些車的時間標示為「推估」，介於離開和回來之間。盤點時漏拍的車會被當成已出場，可到「照片紀錄」刪掉那筆推估出場。</div>
+      <button class="btn" id="gapOk">知道了</button>`;
+    $('#gapOk').onclick = () => { gapResult = null; renderGap(); };
+    return;
+  }
+  if (!gap) {
+    bar.innerHTML = `<button class="btn" id="gapStart">⏸ 我要暫時離開</button>
+      <div class="small">離開前按一下，回來後系統會引導你把場內的車拍一遍，自動找出離開期間進出的車。</div>`;
+    $('#gapStart').onclick = () => gapAction('start');
+    $('#normalCard').hidden = false;
+    return;
+  }
+  if (!gap.end_at) {
+    bar.classList.add('away');
+    bar.innerHTML = `<div class="title">⏸ 離開中</div>
+      <div>${esc(fmtTime(gap.start_at))} 離開，已經 ${since(gap.start_at)}</div>
+      <button class="btn primary big" id="gapReturn">▶ 我回來了・開始盤點</button>
+      <button class="btn link" id="gapCancel">按錯了，取消離開</button>`;
+    $('#gapReturn').onclick = () => gapAction('return');
+    $('#gapCancel').onclick = () => { if (confirm('取消這次離開？')) gapAction('cancel'); };
+    $('#normalCard').hidden = false;
+    return;
+  }
+  bar.classList.add('audit');
+  bar.innerHTML = `<div class="title">📋 盤點中</div>
+    <div>請把<b>場內每一台車</b>都拍一次（已拍 ${auditCount} 台）。</div>
+    <div class="actions two">
+      <button class="btn primary big" id="auditCamBtn">📷 盤點拍照</button>
+      <button class="btn big" id="auditPickBtn">🖼 相簿選</button>
+    </div>
+    <button class="btn big in" id="gapFinish">✔ 盤點完成</button>
+    <div class="small">盤點時拍到、原本不在場內的車 → 算離開期間進場；原本在場內、這次沒拍到的車 → 算離開期間出場。盤點時有新車進出，請照常用下面的進場／出場按鈕。</div>`;
+  $('#auditCamBtn').onclick = () => $('#auditCam').click();
+  $('#auditPickBtn').onclick = () => $('#auditPick').click();
+  $('#gapFinish').onclick = () => {
+    if (confirm(`確定盤點完成？場內有拍到 ${auditCount} 台，沒拍到的在場車輛會被算成已出場。`)) gapAction('finish');
+  };
+}
+
+async function gapAction(action) {
+  try {
+    const r = await api(`/api/gap/${action}`, { method: 'POST' });
+    if (action === 'return') auditCount = 0;
+    if (action === 'finish') {
+      gapResult = r;
+      gap = null;
+    } else {
+      gap = r.gap;
+    }
+    renderGap();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+$('#auditCam').addEventListener('change', (e) => { handleFiles(e.target.files, true, 'in', gap?.id); e.target.value = ''; });
+$('#auditPick').addEventListener('change', (e) => { handleFiles(e.target.files, false, 'in', gap?.id); e.target.value = ''; });
+
+async function loadGap() {
+  try {
+    gap = (await api('/api/gap')).gap;
+    if (gap?.end_at) {
+      // 重新整理後，算回這次盤點已拍幾台
+      const { events } = await api(`/api/events?from=${encodeURIComponent(gap.end_at)}`);
+      auditCount = events.filter((e) => e.gap_id === gap.id).length;
+    }
+  } catch {}
+  renderGap();
+}
+setInterval(() => { if (gap && !gap.end_at) renderGap(); }, 60000);
+
 // ---------- 啟動 ----------
+loadGap();
 api('/api/config').then((c) => { $('#mockBadge').hidden = !c.mock; });
 setRange('today');
 showTab(store.get('tab', 'upload'));

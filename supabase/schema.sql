@@ -61,3 +61,17 @@ language sql security invoker set search_path = '' as $$
 $$;
 revoke all on function public.put_photo(text, text), public.get_photo(text), public.delete_photo_if_unused(text) from public;
 grant execute on function public.put_photo(text, text), public.get_photo(text), public.delete_photo_if_unused(text) to anon;
+
+-- 員工暫時離開（空檔）與回來盤點
+create table public.gaps (
+  id bigint generated always as identity primary key,
+  start_at timestamptz not null,
+  end_at timestamptz,
+  audit_done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table public.gaps enable row level security;
+create policy gaps_app on public.gaps for all to anon using (public.app_ok()) with check (public.app_ok());
+
+alter table public.events add column gap_id bigint references public.gaps(id) on delete set null;
+alter table public.events add column estimated_from timestamptz; -- 有值表示實際時間介於 estimated_from 和 taken_at 之間（空檔推估）

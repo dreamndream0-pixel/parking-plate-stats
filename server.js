@@ -89,10 +89,55 @@ async function handleApi(req, res, url) {
   // 前端設定
   if (url.pathname === '/api/config') return send(res, 200, { needPassword: !!PASSWORD, mock: MOCK });
 
+  // ---------- 員工暫時離開（空檔）→ 回來盤點 ----------
+  // 流程：start（離開）→ return（回來，開始盤點拍照）→ finish（盤點完成，系統比對）
+  if (url.pathname === '/api/gap' && req.method === 'GET') {
+    return send(res, 200, { gap: await store.openGap() });
+  }
+  if (url.pathname === '/api/gap/start' && req.method === 'POST') {
+    const open = await store.openGap();
+    if (open) return send(res, 200, { gap: open });
+    return send(res, 200, { gap: await store.insertGap({ start_at: new Date().toISOString() }) });
+  }
+  if (url.pathname === '/api/gap/cancel' && req.method === 'POST') {
+    const open = await store.openGap();
+    if (open && !open.end_at) await store.updateGap(open.id, { end_at: open.start_at, audit_done: true });
+    return send(res, 200, { gap: null });
+  }
+  if (url.pathname === '/api/gap/return' && req.method === 'POST') {
+    const open = await store.openGap();
+    if (!open) return send(res, 400, { error: '目前沒有離開中的紀錄' });
+    if (!open.end_at) await store.updateGap(open.id, { end_at: new Date().toISOString() });
+    return send(res, 200, { gap: await store.getGap(open.id) });
+  }
+  if (url.pathname === '/api/gap/finish' && req.method === 'POST') {
+    const open = await store.openGap();
+    if (!open || !open.end_at) return send(res, 400, { error: '還沒按「回來」' });
+    const events = await allEvents();
+    // 系統說在場內，但回來後沒再拍到 → 空檔期間出場（時間介於最後看到／離開時間 和 回來時間之間）
+    const gone = pairSessions(events).filter((s) => s.status === 'inside' && s.last_seen < open.end_at);
+    const exited = [];
+    for (const s of gone) {
+      const from = s.last_seen > open.start_at ? s.last_seen : open.start_at;
+      await store.insertEvent({
+        plate: s.plate, direction: 'out', taken_at: open.end_at, time_source: 'gap', photo: '',
+        confidence: null, vehicle: '', ai_plate: '', gate: '', gap_id: open.id, estimated_from: from,
+      });
+      exited.push(s.plate);
+    }
+    // 盤點時拍到、但原本不在場內 → 空檔期間進場
+    const entered = events.filter((e) => e.gap_id === open.id && e.estimated_from).map((e) => e.plate);
+    await store.updateGap(open.id, { audit_done: true });
+    return send(res, 200, { gap: { ...open, audit_done: true }, entered: [...new Set(entered)], exited });
+  }
+
   // 上傳照片 → AI 辨識 → 存事件
   if (url.pathname === '/api/upload' && req.method === 'POST') {
     const body = await readJson(req);
-    const { image, direction, takenAt, timeSource = 'upload', filename = '', gate = '' } = body;
+    const { image, direction, takenAt, timeSource = 'upload', filename = '', gate = '', gapId = null } = body;
+    // 盤點中拍的照片：記在這次空檔底下
+    const gap = gapId ? await store.getGap(gapId) : null;
+    if (gapId && (!gap || !gap.end_at || gap.audit_done)) return send(res, 400, { error: '盤點已結束，請改用進場／出場按鈕' });
     if (!image) return send(res, 400, { error: '沒有照片' });
     if (!['in', 'out'].includes(direction)) return send(res, 400, { error: '請選擇進場或出場' });
     const t = takenAt && !Number.isNaN(Date.parse(takenAt)) ? new Date(takenAt).toISOString() : new Date().toISOString();
@@ -117,11 +162,15 @@ async function handleApi(req, res, url) {
 
     // 有辨識到車牌才存照片，免得占用資料庫空間。重複拍的照片也照樣保存。
     if (main.length) await store.savePhoto(photo, buf);
+    // 盤點時：這台車原本不在場內 → 是空檔期間進場的，進場時間推估為「離開時間～現在」
+    const insideNow = gap ? new Set(pairSessions(await allEvents()).filter((s) => s.status === 'inside').map((s) => s.plate)) : null;
     const inserted = [];
     for (const p of main) {
       inserted.push(await store.insertEvent({
         plate: p.plate, direction, taken_at: t, time_source: src, photo,
         confidence: p.confidence, vehicle: p.vehicle || '', ai_plate: p.plate, gate,
+        gap_id: gap ? gap.id : null,
+        estimated_from: gap && !insideNow.has(p.plate) ? gap.start_at : null,
       }));
     }
 
@@ -206,6 +255,9 @@ async function handleApi(req, res, url) {
         avgDurationMin: avg,
         missingExit: list.filter((s) => s.status === 'missing_exit').length,
         missingEntry: list.filter((s) => s.status === 'missing_entry').length,
+        // 員工離開期間推估的進出（時間不精確）
+        estimatedEntries: sessions.filter((s) => s.entry_estimated_from && inRange(s.entry_time, from, to)).length,
+        estimatedExits: sessions.filter((s) => s.exit_estimated_from && inRange(s.exit_time, from, to)).length,
       },
       sessions: list,
     });
@@ -221,8 +273,14 @@ async function handleApi(req, res, url) {
     const rows = pairSessions(await allEvents()).filter(
       (s) => (s.entry_time && inRange(s.entry_time, from, to)) || (s.exit_time && inRange(s.exit_time, from, to))
     );
-    const lines = [['車牌', '進場時間', '出場時間', '停留(分鐘)', '狀態'].join(',')];
-    for (const s of rows) lines.push([s.plate, fmt(s.entry_time), fmt(s.exit_time), s.duration_min ?? '', statusText[s.status]].map(csvCell).join(','));
+    const lines = [['車牌', '進場時間', '出場時間', '停留(分鐘)', '狀態', '備註'].join(',')];
+    for (const s of rows) {
+      const note = [];
+      if (s.entry_estimated_from) note.push(`員工離開期間進場：${fmt(s.entry_estimated_from)}～${fmt(s.entry_time)} 之間`);
+      if (s.exit_estimated_from) note.push(`員工離開期間出場：${fmt(s.exit_estimated_from)}～${fmt(s.exit_time)} 之間`);
+      if (s.checks.length) note.push(`重複拍 ${s.checks.length} 次`);
+      lines.push([s.plate, fmt(s.entry_time), fmt(s.exit_time), s.duration_min ?? '', statusText[s.status], note.join('；')].map(csvCell).join(','));
+    }
     return send(res, 200, '﻿' + lines.join('\r\n'), {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="parking.csv"',

@@ -115,6 +115,14 @@ dialog form { text-align: center; margin-top: 8px; }
 dialog::backdrop { background: rgb(0 0 0 / .6); }
 .warnbox { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 8px; }
 .actions.two { grid-template-columns: 1fr 1fr; margin-top: 0; }
+.gapbar { display: grid; gap: 10px; }
+.gapbar.away { background: var(--warn-bg); border-color: var(--warn); }
+.gapbar.audit { border: 2px solid var(--accent); }
+.gapbar .title { font-weight: 700; font-size: 17px; }
+.gapbar .btn.big { font-size: 18px; padding: 16px 8px; }
+.btn.link { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 4px; }
+.tag.est { color: var(--warn); }
+.nophoto { width: 84px; height: 84px; border-radius: 8px; background: var(--line); display: grid; place-items: center; font-size: 12px; color: var(--muted); text-align: center; }
 .repeat-dlg { width: min(92vw, 420px); padding: 16px; text-align: center; }
 .repeat-dlg .repeat-title { font-size: 18px; font-weight: 700; color: var(--warn); margin-bottom: 6px; }
 .repeat-dlg .plate { font-size: 28px; margin-bottom: 8px; }
