@@ -272,9 +272,7 @@ async function camStart() {
   $('#camVideo').srcObject = cam.stream;
   await $('#camVideo').play().catch(() => {});
   // 數位變焦最多 2 倍（3 倍太糊）；硬體變焦看鏡頭能到幾倍
-  const maxZ = cam.hwZoom ? cam.hwZoom.max : 2;
-  $$('#camZoom button').forEach((b) => (b.hidden = Number(b.dataset.z) > maxZ));
-  if (cam.zoom > maxZ) cam.zoom = maxZ;
+  $$('#camZoom button').forEach((b) => (b.hidden = Number(b.dataset.z) > camMaxZoom()));
   await camSetZoom(cam.zoom);
 }
 
@@ -284,18 +282,70 @@ function camStop() {
   $('#camVideo').srcObject = null;
 }
 
+const camMaxZoom = () => (cam.hwZoom ? Math.min(cam.hwZoom.max, 6) : 2);
+
 async function camSetZoom(z) {
+  z = Math.round(Math.min(camMaxZoom(), Math.max(1, z)) * 10) / 10;
   cam.zoom = z;
   store.set('camZoom', String(z));
-  $$('#camZoom button').forEach((b) => b.classList.toggle('on', Number(b.dataset.z) === z));
+  $$('#camZoom button').forEach((b) => b.classList.toggle('on', Math.abs(Number(b.dataset.z) - z) < 0.05));
   if (cam.hwZoom) {
     const v = Math.min(cam.hwZoom.max, Math.max(cam.hwZoom.min, z));
-    await cam.track.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
+    await cam.track?.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
     $('#camVideo').style.transform = '';
   } else {
     $('#camVideo').style.transform = z > 1 ? `scale(${z})` : '';
   }
 }
+
+// 兩指縮放；單指點一下＝對焦（機型支援才有作用）
+const pinch = { d0: 0, z0: 1, moved: false, raf: 0, next: 1 };
+const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+let zoomBadgeTimer;
+function showZoomBadge(z) {
+  $('#camZoomBadge').hidden = false;
+  $('#camZoomBadge').textContent = `${z.toFixed(1)}×`;
+  clearTimeout(zoomBadgeTimer);
+  zoomBadgeTimer = setTimeout(() => ($('#camZoomBadge').hidden = true), 900);
+}
+$('.cam-view').addEventListener('touchstart', (e) => {
+  pinch.moved = false;
+  if (e.touches.length === 2) { pinch.d0 = touchDist(e.touches); pinch.z0 = cam.zoom; pinch.moved = true; }
+}, { passive: true });
+$('.cam-view').addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 2 || !pinch.d0) return;
+  pinch.moved = true;
+  pinch.next = Math.min(camMaxZoom(), Math.max(1, pinch.z0 * (touchDist(e.touches) / pinch.d0)));
+  showZoomBadge(pinch.next);
+  if (!pinch.raf) pinch.raf = requestAnimationFrame(() => { pinch.raf = 0; camSetZoom(pinch.next); });
+}, { passive: true });
+$('.cam-view').addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch.d0 = 0; }, { passive: true });
+
+$('.cam-view').addEventListener('click', async (e) => {
+  if (pinch.moved || e.target.id === 'camThumb' || !cam.track) return;
+  const box = $('.cam-view').getBoundingClientRect();
+  const f = $('#camFocus');
+  f.hidden = true; void f.offsetWidth; // 重新播動畫
+  f.style.left = `${e.clientX - box.left}px`;
+  f.style.top = `${e.clientY - box.top}px`;
+  f.hidden = false;
+  const caps = cam.track.getCapabilities?.() || {};
+  const modes = caps.focusMode || [];
+  const x = (e.clientX - box.left) / box.width, y = (e.clientY - box.top) / box.height;
+  const adv = {};
+  if ('pointsOfInterest' in (navigator.mediaDevices.getSupportedConstraints?.() || {})) adv.pointsOfInterest = [{ x, y }];
+  if (modes.includes('single-shot')) adv.focusMode = 'single-shot';
+  else if (modes.includes('continuous')) adv.focusMode = 'continuous';
+  if (Object.keys(adv).length) await cam.track.applyConstraints({ advanced: [adv] }).catch(() => {});
+});
+
+// 剛拍的縮圖：點一下放大確認
+$('#camThumb').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const d = $('#photoDlg');
+  $('img', d).src = $('#camThumb').src;
+  d.showModal();
+});
 
 function openCam(dir) {
   cam.dir = dir;
@@ -303,6 +353,7 @@ function openCam(dir) {
   $('#camDir').textContent = dir === 'in' ? '進場' : '出場';
   $('#camDir').classList.toggle('out', dir === 'out');
   $('#camCount').textContent = '對準車牌按白色快門';
+  $('#camThumb').hidden = true;
   $('#cam').hidden = false;
   document.body.style.overflow = 'hidden';
   if (!navigator.mediaDevices?.getUserMedia) return camMsg('這個瀏覽器不支援網頁相機，請按右下「用 iPhone 相機」。');
@@ -330,6 +381,11 @@ async function camShoot() {
   const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
   if (!blob) return;
   const file = new File([blob], `cam-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  const th = $('#camThumb');
+  if (th.src.startsWith('blob:')) URL.revokeObjectURL(th.src);
+  th.src = URL.createObjectURL(blob);
+  th.hidden = false;
+  th.classList.remove('pop'); void th.offsetWidth; th.classList.add('pop');
   cam.count++;
   $('#camCount').textContent = `已拍 ${cam.count} 張，上傳中…（${sw}×${sh}）`;
   handleFiles([file], true, cam.dir).then(() => { $('#camCount').textContent = `已拍 ${cam.count} 張`; });
