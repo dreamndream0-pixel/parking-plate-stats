@@ -115,19 +115,7 @@ async function handleApi(req, res, url) {
     // 只記錄最主要（最近、最大）的那台車，背景停著的車不算
     const main = ai.plates.slice(0, 1);
 
-    // 同一車牌 2 分鐘內已有紀錄 → 視為重複照片，不再記一次
-    const all = await allEvents();
-    const tMs = Date.parse(t);
-    const dup = main.length && all.find((e) => e.plate === main[0].plate && Math.abs(Date.parse(e.taken_at) - tMs) < 2 * 60 * 1000);
-    if (dup) {
-      return send(res, 200, {
-        events: [],
-        duplicate: `${main[0].plate} 在 ${new Date(dup.taken_at).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' })} 已經有紀錄，這張視為重複照片，沒有記錄`,
-        note: ai.note, takenAt: t, timeSource: src,
-      });
-    }
-
-    // 有辨識到車牌才存照片，免得占用資料庫空間
+    // 有辨識到車牌才存照片，免得占用資料庫空間。重複拍的照片也照樣保存。
     if (main.length) await store.savePhoto(photo, buf);
     const inserted = [];
     for (const p of main) {
@@ -136,8 +124,24 @@ async function handleApi(req, res, url) {
         confidence: p.confidence, vehicle: p.vehicle || '', ai_plate: p.plate, gate,
       }));
     }
-    const dirs = resolveDirections(await allEvents());
-    const created = inserted.map((e) => ({ ...e, resolved: dirs.get(e.id) }));
+
+    // 判斷這張是不是重複拍的：已在場內又拍進場 → 確認在場；已出場又拍出場 → 重複出場
+    const events = await allEvents();
+    const dirs = resolveDirections(events);
+    const sessions = pairSessions(events);
+    const hhmm = (iso) => new Date(iso).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' });
+    const created = inserted.map((e) => {
+      const resolved = dirs.get(e.id);
+      let repeat = '';
+      if (resolved === 'recheck') {
+        const s = sessions.find((x) => x.checks.some((c) => c.id === e.id));
+        repeat = `重複：${e.plate} 在 ${hhmm(s.entry_time)} 已進場，確認還在場內`;
+      } else if (resolved === 'repeat_out') {
+        const s = sessions.find((x) => x.repeat_exits.some((c) => c.id === e.id));
+        repeat = `重複：${e.plate} 在 ${hhmm(s.exit_time)} 已出場`;
+      }
+      return { ...e, resolved, repeat };
+    });
     return send(res, 200, { events: created, note: ai.note, model: ai.model, takenAt: t, timeSource: src, photo });
   }
 

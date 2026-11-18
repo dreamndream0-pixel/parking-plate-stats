@@ -20,9 +20,24 @@ test('自動模式：交替判斷，且不受上傳順序影響', () => {
   assert.equal(inside.entry_time, '2026-11-17T05:00:00.000Z');
 });
 
-test('漏拍：連續兩次進場、只有出場', () => {
-  const s = pairSessions([ev('A-1', 'in', '01:00'), ev('A-1', 'in', '02:00'), ev('B-2', 'out', '03:00')]);
-  assert.deepEqual(s.map((x) => x.status).sort(), ['inside', 'missing_entry', 'missing_exit']);
+test('在場內重複拍進場：算確認在場，不另開一筆', () => {
+  const s = pairSessions([ev('A-1', 'in', '01:00'), ev('A-1', 'in', '02:00'), ev('A-1', 'in', '04:00'), ev('A-1', 'out', '05:00')]);
+  assert.equal(s.length, 1);
+  assert.equal(s[0].status, 'done');
+  assert.equal(s[0].entry_time, '2026-11-17T01:00:00.000Z');
+  assert.equal(s[0].checks.length, 2);
+  assert.equal(s[0].duration_min, 240);
+});
+
+test('出場後重複拍出場：掛在同一筆，不算缺進場', () => {
+  const s = pairSessions([ev('C-3', 'in', '01:00'), ev('C-3', 'out', '02:00'), ev('C-3', 'out', '02:01')]);
+  assert.equal(s.length, 1);
+  assert.equal(s[0].repeat_exits.length, 1);
+});
+
+test('只拍到出場：缺進場紀錄', () => {
+  const s = pairSessions([ev('B-2', 'out', '03:00')]);
+  assert.equal(s[0].status, 'missing_entry');
 });
 
 test('車牌正規化', () => {

@@ -140,10 +140,6 @@ async function uploadOne(job) {
     if (r.timeSource === 'file' || r.timeSource === 'upload') {
       head += `<div class="warnbox">⚠ 照片裡沒有拍攝時間，這是選取照片的時間，可能不準，請到「照片紀錄」修正</div>`;
     }
-    if (r.duplicate) {
-      meta.innerHTML = `${head}<div class="small">${esc(r.duplicate)}</div>`;
-      return;
-    }
     if (!r.events.length) {
       meta.innerHTML = `${head}<div class="err">沒有辨識到車牌</div><div class="small">${esc(r.note)}</div>`;
       return;
@@ -169,18 +165,28 @@ $$('.camInput').forEach((inp) => inp.addEventListener('change', (e) => { handleF
 $$('.pickInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, false, inp.dataset.dir); e.target.value = ''; }));
 
 // 單筆事件：車牌（可改）、方向（可改）、時間、刪除
+const RESOLVED = {
+  in: ['進場', 'in'],
+  out: ['出場', 'out'],
+  recheck: ['重複・確認在場內', 'in'],
+  repeat_out: ['重複出場', 'out'],
+};
 function eventRow(e) {
   const resolved = e.resolved || e.direction;
+  const [label, cls] = RESOLVED[resolved] || RESOLVED.in;
+  // 下拉選單顯示照片原本是按「進場」還是「出場」拍的
+  const dir = e.direction === 'out' || (e.direction === 'auto' && (resolved === 'out' || resolved === 'repeat_out')) ? 'out' : 'in';
   const conf = e.confidence != null && e.confidence < 0.8 ? ' <span class="tag warn">請確認</span>' : '';
   return `<div class="ev" data-id="${e.id}">
     <div class="inline">
       <input class="plate-input" type="text" value="${esc(e.plate)}" aria-label="車牌">
-      <span class="tag ${resolved}">${resolved === 'in' ? '進場' : '出場'}</span>${conf}
+      <span class="tag ${cls}">${label}</span>${conf}
     </div>
+    ${e.repeat ? `<div class="small">${esc(e.repeat)}</div>` : ''}
     <div class="inline small">
       <select aria-label="方向">
-        <option value="in" ${resolved === 'in' ? 'selected' : ''}>進場</option>
-        <option value="out" ${resolved === 'out' ? 'selected' : ''}>出場</option>
+        <option value="in" ${dir === 'in' ? 'selected' : ''}>進場</option>
+        <option value="out" ${dir === 'out' ? 'selected' : ''}>出場</option>
       </select>
       ${e.vehicle ? esc(e.vehicle) : ''}
       ${e.ai_plate && e.ai_plate !== e.plate ? `・AI 原判：${esc(e.ai_plate)}` : ''}
@@ -260,9 +266,12 @@ async function loadStats() {
   $('#sessBody').innerHTML = data.sessions.map((x) => {
     const [txt, cls] = STATUS[x.status];
     const link = (iso, photo) => (iso ? `<a href="#" data-photo="${esc(photo)}">${esc(fmtTime(iso))}</a>` : '—');
+    // 在場內重複拍到的次數，最後一次可點開看照片
+    const last = x.checks?.[x.checks.length - 1];
+    const checks = last ? `<div class="small">重複拍 ${x.checks.length} 次・最後 <a href="#" data-photo="${esc(last.photo)}">${esc(fmtTime(last.time).slice(6))}</a></div>` : '';
     return `<tr>
       <td><span class="plate">${esc(x.plate)}</span></td>
-      <td>${link(x.entry_time, x.entry_photo)}</td>
+      <td>${link(x.entry_time, x.entry_photo)}${checks}</td>
       <td>${link(x.exit_time, x.exit_photo)}</td>
       <td>${fmtDur(x.duration_min)}</td>
       <td><span class="tag ${cls}">${txt}</span></td>
