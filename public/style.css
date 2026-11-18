@@ -158,5 +158,14 @@ input.num { font: inherit; width: 4.5em; padding: 6px 8px; border: 1px solid var
 .dist .r { display: grid; grid-template-columns: 4.5em 1fr 3.5em; gap: 8px; align-items: center; }
 .dist .bar { height: 12px; background: var(--accent); border-radius: 3px; min-width: 2px; }
 .dist .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.earn { border: 2px solid var(--in); }
+.earn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.earn .k { font-size: 13px; color: var(--muted); }
+.earn .big { font-size: 34px; font-weight: 800; color: var(--in); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.earn .big.sub { font-size: 26px; color: var(--text); }
+.kpis.flat .kpi { border: 0; background: var(--bg); }
+.chart.occ { position: relative; }
+.chart .b.occ { background: var(--accent); }
+.chart .capline { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--err); pointer-events: none; }
 td.money { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
 .btn.big.out { background: var(--out); border-color: var(--out); }

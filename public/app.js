@@ -643,6 +643,7 @@ async function fetchFees(pw) {
   if (t) p.set('to', dayEndIso(t));
   p.set('rate', $('#feeRate').value || '15');
   p.set('free', $('#feeFree').value || '15');
+  p.set('tzo', String(-new Date().getTimezoneOffset()));
   return api(`/api/fees?${p}`, { headers: { 'X-Fee-Password': pw } });
 }
 
@@ -669,6 +670,8 @@ async function loadFees() {
   if (r.missingEntry || r.missingExit) note.push(`缺進場 ${r.missingEntry} 台、缺出場 ${r.missingExit} 台算不出金額`);
   $('#fNote').textContent = note.join('；');
 
+  renderUsage(r);
+
   const max = Math.max(1, ...r.dist.map((d) => d.count));
   $('#fDist').innerHTML = r.dist.length
     ? r.dist.map((d) => `<div class="r"><span>${d.fee ? money(d.fee) : '免費'}</span><div class="bar" style="width:${(d.count / max) * 100}%"></div><span class="n">${d.count} 台</span></div>`).join('')
@@ -680,6 +683,62 @@ async function loadFees() {
     <td>${fmtDur(x.minutes)}</td>
     <td class="money">${x.fee ? money(x.fee) : '免費'}</td>
   </tr>`).join('') || '<tr><td colspan="5" class="small">沒有資料</td></tr>';
+}
+
+// 一天可以賺多少 + 使用率 + 每天明細
+function renderUsage(r) {
+  const cap = Number($('#feeCap').value) || 0;
+  const pct = (n) => (cap ? `${Math.round((n / cap) * 100)}%` : '');
+  const days = r.days.filter((d) => d.entries > 0);
+  const full = days.filter((d) => !d.today);
+  const today = days.find((d) => d.today);
+
+  // 平均每天：有完整的日子就用完整日平均；只有今天就用今天（含在場應收）
+  let perDay = 0;
+  if (full.length) {
+    perDay = full.reduce((a, d) => a + d.revenue, 0) / full.length;
+    $('#eDayLabel').textContent = `平均每天（${full.length} 天）`;
+    $('#eNote').textContent = today ? `今天還沒結束，不算進平均；今天目前已收 ${money(today.revenue)}、在場應收 ${money(today.pending)}。` : '';
+  } else if (today) {
+    perDay = today.revenue + today.pending;
+    $('#eDayLabel').textContent = '今天（還沒結束）';
+    $('#eNote').textContent = `只有今天的資料：已收 ${money(today.revenue)} ＋ 在場車輛算到現在 ${money(today.pending)}。之後車還會繼續進出，打烊後的數字才準；累積幾天後這裡會改成平均。`;
+  } else {
+    $('#eDayLabel').textContent = '平均每天';
+    $('#eNote').textContent = '這段期間沒有資料';
+  }
+  $('#eDay').textContent = money(Math.round(perDay));
+  $('#eMonth').textContent = money(Math.round(perDay * 30));
+
+  // 使用率
+  const top = days.reduce((a, d) => (!a || d.peak > a.peak ? d : a), null);
+  $('#uPeak').textContent = top ? `${top.peak} 台` : '–';
+  $('#uPeakSub').textContent = top ? [pct(top.peak) && `使用率 ${pct(top.peak)}`, top.peakAt && `${days.length > 1 ? top.date.slice(5) + ' ' : ''}${fmtTime(top.peakAt).slice(6, 11)}`].filter(Boolean).join('・') : '';
+  const avg = days.length ? days.reduce((a, d) => a + d.avgInside, 0) / days.length : 0;
+  $('#uAvg').textContent = days.length ? `${avg.toFixed(1)} 台` : '–';
+  const hrs = today && !full.length ? `${pad(today.openFrom)}～${pad(today.openTo)} 時` : '有車的時段';
+  $('#uAvgSub').textContent = [pct(avg) && `使用率 ${pct(avg)}`, hrs].filter(Boolean).join('・');
+  const entriesPerDay = days.length ? days.reduce((a, d) => a + d.entries, 0) / days.length : 0;
+  $('#uTurn').textContent = cap ? `${(entriesPerDay / cap).toFixed(1)} 次` : '–';
+  $('#uTurnSub').textContent = cap ? `每格每天換 ${(entriesPerDay / cap).toFixed(1)} 台車` : '填車位數才算得出來';
+
+  // 每小時平均在場（多天就取平均）
+  const hourly = Array(24).fill(0);
+  for (const d of days) d.hourly.forEach((v, i) => (hourly[i] += v / days.length));
+  const scale = Math.max(1, cap, ...hourly);
+  $('#uChart').innerHTML = hourly.map((v, h) => `<div class="h" data-h="${h}" title="${h}:00 平均 ${v.toFixed(1)} 台"><div class="b occ" style="height:${(v / scale) * 100}%"></div></div>`).join('')
+    + (cap ? `<div class="capline" style="bottom:${(cap / scale) * 100}%"></div>` : '');
+  $('#uLegend').innerHTML = `<span class="sw" style="background:var(--accent)"></span>平均在場台數${cap ? `　<span style="color:var(--err)">- - 滿車 ${cap} 格</span>` : ''}`;
+
+  // 每天明細
+  $('#dBody').innerHTML = days.slice().reverse().map((d) => `<tr>
+    <td>${d.date.slice(5).replace('-', '/')}${d.today ? ' <span class="tag in">今天</span>' : ''}</td>
+    <td>${d.tempEntries}</td>
+    <td>${d.monthlyEntries}</td>
+    <td class="money">${money(d.revenue)}${d.today && d.pending ? `<div class="small">＋在場 ${money(d.pending)}</div>` : ''}</td>
+    <td>${d.peak} 台${cap ? ` <span class="small">${pct(d.peak)}</span>` : ''}</td>
+    <td>${d.avgInside} 台${cap ? ` <span class="small">${pct(d.avgInside)}</span>` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="6" class="small">沒有資料</td></tr>';
 }
 
 function setFeeRange(kind) {
@@ -695,6 +754,8 @@ $$('[data-frange]').forEach((b) => b.addEventListener('click', () => setFeeRange
 ['#feeFrom', '#feeTo'].forEach((s) => $(s).addEventListener('change', loadFees));
 $('#feeRate').value = store.get('feeRate', '15');
 $('#feeFree').value = store.get('feeFree', '15');
+$('#feeCap').value = store.get('feeCap', '');
+$('#feeCap').addEventListener('input', () => { store.set('feeCap', $('#feeCap').value); loadFees(); });
 let feeTimer;
 ['#feeRate', '#feeFree'].forEach((s) => $(s).addEventListener('input', () => {
   store.set('feeRate', $('#feeRate').value);

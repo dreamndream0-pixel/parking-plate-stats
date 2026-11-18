@@ -9,7 +9,7 @@ import { createStore } from './lib/store.js';
 import { pairSessions, resolveDirections, normalizePlate } from './lib/pairing.js';
 import { recognizePlates, mockRecognize } from './lib/recognize.js';
 import { buildMatcher, normalizeMask, readMonthlyList } from './lib/monthly.js';
-import { summarizeFees, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
+import { summarizeFees, dailyReport, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(ROOT, 'data');
@@ -338,8 +338,10 @@ async function handleApi(req, res, url) {
     const monthly = await monthlyMatcher();
     const sessions = pairSessions(await allEvents()).map((s) => ({ ...s, monthly: monthly(s.plate) }));
     const now = Date.now();
-    const result = summarizeFees(sessions, { from: url.searchParams.get('from'), to: url.searchParams.get('to'), now, rate, freeMin });
-    return send(res, 200, { rate, freeMin, now: new Date(now).toISOString(), ...result });
+    const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+    const result = summarizeFees(sessions, { from, to, now, rate, freeMin });
+    const days = dailyReport(sessions, { from, to, now, rate, freeMin, tzOffsetMin: num('tzo', 480) });
+    return send(res, 200, { rate, freeMin, now: new Date(now).toISOString(), ...result, days });
   }
 
   // 匯出 CSV

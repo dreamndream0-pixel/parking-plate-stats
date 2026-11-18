@@ -1,6 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feeFor, summarizeFees } from '../lib/fees.js';
+import { feeFor, summarizeFees, dailyReport } from '../lib/fees.js';
+
+test('每天收入與使用率', () => {
+  // 台灣 11/18：A 09:00–10:00（臨停 $30）、B 09:30–10:30（月租）、C 10:00 進場還在（現在 11:00，應收 $30）
+  const now = Date.parse('2026-11-18T03:00:00Z');
+  const sessions = [
+    { plate: 'A', status: 'done', entry_time: '2026-11-18T01:00:00Z', exit_time: '2026-11-18T02:00:00Z', monthly: null },
+    { plate: 'B', status: 'done', entry_time: '2026-11-18T01:30:00Z', exit_time: '2026-11-18T02:30:00Z', monthly: { mask: 'x' } },
+    { plate: 'C', status: 'inside', entry_time: '2026-11-18T02:00:00Z', exit_time: null, monthly: null },
+  ];
+  const [d] = dailyReport(sessions, { from: '2026-11-17T16:00:00Z', to: '2026-11-18T16:00:00Z', now });
+  assert.equal(d.date, '2026-11-18');
+  assert.equal(d.today, true);
+  assert.equal(d.entries, 3);
+  assert.equal(d.monthlyEntries, 1);
+  assert.equal(d.revenue, 30);
+  assert.equal(d.pending, 30);
+  assert.equal(d.peak, 2); // 09:30–10:00 A+B；10:00 A 走 C 進，仍 2 台
+  assert.deepEqual(d.hourly.slice(9, 11), [1.5, 1.5]);
+  assert.equal(d.openFrom, 9);
+  assert.equal(d.openTo, 11);
+  assert.equal(d.avgInside, 1.5);
+});
 
 test('每半小時收費，15 分鐘內免費', () => {
   assert.equal(feeFor(10), 0);

@@ -178,9 +178,44 @@
       每半小時 <input type="number" id="feeRate" class="num" min="0" step="1" inputmode="numeric"> 元，
       前 <input type="number" id="feeFree" class="num" min="0" step="1" inputmode="numeric"> 分鐘免費
     </div>
+    <div class="row">
+      車位數 <input type="number" id="feeCap" class="num" min="0" step="1" inputmode="numeric" placeholder="?"> 格（算使用率用）
+    </div>
     <p class="hint">月租車不收費。超過免費時間就從進場開始算，不滿半小時算半小時。</p>
   </div>
 
+  <div class="card earn">
+    <div class="label">💰 一天可以賺多少</div>
+    <div class="earn-row">
+      <div><div class="k" id="eDayLabel">平均每天</div><div class="big" id="eDay">–</div></div>
+      <div><div class="k">預估每月（× 30 天）</div><div class="big sub" id="eMonth">–</div></div>
+    </div>
+    <p class="hint" id="eNote"></p>
+  </div>
+
+  <div class="card">
+    <div class="label">🅿️ 停車使用率</div>
+    <div class="kpis three flat">
+      <div class="kpi"><div class="k">尖峰在場</div><div class="v" id="uPeak">–</div><div class="small" id="uPeakSub"></div></div>
+      <div class="kpi"><div class="k">平均在場</div><div class="v" id="uAvg">–</div><div class="small" id="uAvgSub"></div></div>
+      <div class="kpi"><div class="k">週轉率</div><div class="v" id="uTurn">–</div><div class="small" id="uTurnSub"></div></div>
+    </div>
+    <div class="label" style="margin-top:14px">每小時平均在場台數</div>
+    <div id="uChart" class="chart occ"></div>
+    <div class="legend" id="uLegend"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">每天明細</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>臨停</th><th>月租</th><th>收入</th><th>尖峰</th><th>平均在場</th></tr></thead>
+        <tbody id="dBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="label" style="margin:4px 0 8px">收費合計</div>
   <div class="kpis three">
     <div class="kpi"><div class="k">已出場收費</div><div class="v" id="fExited">–</div></div>
     <div class="kpi"><div class="k">在場應收（算到現在）</div><div class="v" id="fInside">–</div></div>
