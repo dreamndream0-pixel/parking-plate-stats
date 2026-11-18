@@ -71,6 +71,26 @@ function csvCell(v) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// 新增的紀錄是不是重複的：已在場內又記進場 → 確認在場；已出場又記出場 → 重複出場
+async function describe(inserted) {
+  const events = await allEvents();
+  const dirs = resolveDirections(events);
+  const sessions = pairSessions(events);
+  const hhmm = (iso) => new Date(iso).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' });
+  return inserted.map((e) => {
+    const resolved = dirs.get(e.id);
+    let repeat = '';
+    if (resolved === 'recheck') {
+      const s = sessions.find((x) => x.checks.some((c) => c.id === e.id));
+      repeat = `重複：${e.plate} 在 ${hhmm(s.entry_time)} 已進場，確認還在場內`;
+    } else if (resolved === 'repeat_out') {
+      const s = sessions.find((x) => x.repeat_exits.some((c) => c.id === e.id));
+      repeat = `重複：${e.plate} 在 ${hhmm(s.exit_time)} 已出場`;
+    }
+    return { ...e, resolved, repeat };
+  });
+}
+
 // ---------- API ----------
 async function handleApi(req, res, url) {
   // 給 UptimeRobot 定時連線：讓 Render 不休眠，也順便讀一下資料庫讓 Supabase 不被暫停（不需要密碼、不回傳任何資料）
@@ -176,24 +196,22 @@ async function handleApi(req, res, url) {
       }));
     }
 
-    // 判斷這張是不是重複拍的：已在場內又拍進場 → 確認在場；已出場又拍出場 → 重複出場
-    const events = await allEvents();
-    const dirs = resolveDirections(events);
-    const sessions = pairSessions(events);
-    const hhmm = (iso) => new Date(iso).toLocaleTimeString('zh-TW', { hour12: false, timeZone: 'Asia/Taipei' });
-    const created = inserted.map((e) => {
-      const resolved = dirs.get(e.id);
-      let repeat = '';
-      if (resolved === 'recheck') {
-        const s = sessions.find((x) => x.checks.some((c) => c.id === e.id));
-        repeat = `重複：${e.plate} 在 ${hhmm(s.entry_time)} 已進場，確認還在場內`;
-      } else if (resolved === 'repeat_out') {
-        const s = sessions.find((x) => x.repeat_exits.some((c) => c.id === e.id));
-        repeat = `重複：${e.plate} 在 ${hhmm(s.exit_time)} 已出場`;
-      }
-      return { ...e, resolved, repeat };
-    });
+    const created = await describe(inserted);
     return send(res, 200, { events: created, note: ai.note, model: ai.model, takenAt: t, timeSource: src, photo });
+  }
+
+  // 手動輸入車牌（沒有照片），時間用現在
+  if (url.pathname === '/api/manual' && req.method === 'POST') {
+    const { plate: raw, direction } = await readJson(req, 10_000);
+    const plate = normalizePlate(raw);
+    if (!plate) return send(res, 400, { error: '請輸入車牌' });
+    if (!['in', 'out'].includes(direction)) return send(res, 400, { error: '請選擇進場或出場' });
+    const t = new Date().toISOString();
+    const e = await store.insertEvent({
+      plate, direction, taken_at: t, time_source: 'typed', photo: '',
+      confidence: null, vehicle: '', ai_plate: '', gate: '',
+    });
+    return send(res, 200, { events: await describe([e]), takenAt: t, timeSource: 'typed', photo: '' });
   }
 
   // 修改事件（改車牌 / 改方向 / 改時間）

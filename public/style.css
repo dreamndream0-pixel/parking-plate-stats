@@ -115,6 +115,9 @@ dialog form { text-align: center; margin-top: 8px; }
 dialog::backdrop { background: rgb(0 0 0 / .6); }
 .warnbox { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 8px; }
 .actions.two { grid-template-columns: 1fr 1fr; margin-top: 0; }
+.plate-input.manual { width: 100%; font-size: 22px; padding: 12px; text-align: center; }
+.btn.in-soft { color: var(--in); border-color: var(--in); font-weight: 600; }
+.btn.out-soft { color: var(--out); border-color: var(--out); font-weight: 600; }
 .gapbar { display: grid; gap: 10px; }
 .gapbar.away { background: var(--warn-bg); border-color: var(--warn); }
 .gapbar.audit { border: 2px solid var(--accent); }

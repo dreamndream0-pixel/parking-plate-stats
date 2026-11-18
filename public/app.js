@@ -44,7 +44,7 @@ const dayStartIso = (ymd) => new Date(`${ymd}T00:00:00`).toISOString();
 const dayEndIso = (ymd) => { const d = new Date(`${ymd}T00:00:00`); d.setDate(d.getDate() + 1); return d.toISOString(); };
 const toLocalInput = (iso) => { const d = new Date(iso); return `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
 
-const SRC_TEXT = { gap: '系統推估', exif: '照片時間', camera: '拍照當下', file: '檔案時間', upload: '上傳時間', manual: '手動修改' };
+const SRC_TEXT = { typed: '手動輸入', gap: '系統推估', exif: '照片時間', camera: '拍照當下', file: '檔案時間', upload: '上傳時間', manual: '手動修改' };
 const STATUS = {
   done: ['已出場', ''],
   inside: ['在場內', 'in'],
@@ -177,12 +177,45 @@ async function uploadOne(job) {
 
 // 「車號已在場內」通知：一次跳一個，多張時依序排隊
 let askChain = Promise.resolve();
+// ---------- 手動輸入車牌 ----------
+async function manualAdd(direction) {
+  const input = $('#manualPlate');
+  const plate = input.value.trim();
+  if (!plate) { input.focus(); return; }
+  const li = document.createElement('li');
+  li.className = 'item';
+  li.innerHTML = `<div class="nophoto">手動<br>輸入</div><div class="meta"><div>記錄中…</div></div>`;
+  $('#queue').prepend(li);
+  const meta = $('.meta', li);
+  try {
+    const r = await api('/api/manual', { method: 'POST', body: JSON.stringify({ plate, direction }) });
+    input.value = '';
+    const head = `<div class="small">${esc(fmtTime(r.takenAt))}・${SRC_TEXT.typed}</div>`;
+    const render = () => { meta.innerHTML = head + r.events.map(eventRow).join(''); bindEventRows(meta); };
+    render();
+    for (const e of r.events) {
+      if (e.resolved !== 'recheck') continue;
+      askRepeat(e, '').then(async (toExit) => {
+        if (!toExit) return;
+        await api(`/api/events/${e.id}`, { method: 'PATCH', body: JSON.stringify({ direction: 'out' }) });
+        Object.assign(e, { direction: 'out', resolved: 'out', repeat: '已改為出場' });
+        render();
+      }).catch((err) => alert(err.message));
+    }
+  } catch (err) {
+    meta.innerHTML = `<div class="err">記錄失敗：${esc(err.message)}</div>`;
+  }
+}
+$('#manualIn').addEventListener('click', () => manualAdd('in'));
+$('#manualOut').addEventListener('click', () => manualAdd('out'));
+
 function askRepeat(e, photo) {
   const ask = () => new Promise((resolve) => {
     const dlg = $('#repeatDlg');
     $('#repeatMsg').textContent = e.repeat || `${e.plate} 已在場內`;
     $('#repeatPlate').textContent = e.plate;
-    $('#repeatImg').src = photoUrl(photo);
+    $('#repeatImg').hidden = !photo;
+    if (photo) $('#repeatImg').src = photoUrl(photo);
     const done = (v) => { dlg.close(); resolve(v); };
     $('#repeatToOut').onclick = () => done(true);
     $('#repeatKeep').onclick = () => done(false);
