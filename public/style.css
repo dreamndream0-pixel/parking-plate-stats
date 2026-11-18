@@ -154,6 +154,7 @@ dialog::backdrop { background: rgb(0 0 0 / .6); }
 .kpi.monthly { border-color: var(--accent); }
 .kpi.monthly .v { color: var(--accent); }
 @media (min-width: 521px) { .kpis > .kpi:nth-child(5):nth-last-child(2), .kpis > .kpi:nth-child(6):last-child { grid-column: span 2; } }
+.kpis.two { grid-template-columns: 1fr 1fr; margin-top: 8px; }
 .kpi.total { border: 2px solid var(--accent); }
 .kpi.total .v { color: var(--accent); }
 input.num { font: inherit; width: 4.5em; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); text-align: center; }

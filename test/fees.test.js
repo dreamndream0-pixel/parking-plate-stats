@@ -43,7 +43,7 @@ test('合計：月租不收、在場算到現在', () => {
     { plate: 'EEE-5555', status: 'missing_entry', entry_time: null, exit_time: '2026-11-18T03:00:00Z', monthly: null },
   ];
   const r = summarizeFees(sessions, { now });
-  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1 });
+  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1, avgFee: 23, avgMin: 40 });
   assert.deepEqual(r.inside, { count: 1, amount: 30 });
   assert.equal(r.total, 75);
   assert.equal(r.monthly, 1);
