@@ -77,11 +77,9 @@
       <button class="btn sm" data-range="yesterday">昨天</button>
       <button class="btn sm" data-range="7d">近 7 天</button>
       <button class="btn sm" data-range="all">全部</button>
-    </div>
-    <div class="row">
-      <input type="date" id="fromDate" aria-label="開始日期">
-      <span>到</span>
-      <input type="date" id="toDate" aria-label="結束日期">
+      <button class="btn sm datebtn" type="button" data-dates="fromDate,toDate" aria-label="選擇起迄日期"></button>
+      <input type="hidden" id="fromDate">
+      <input type="hidden" id="toDate">
     </div>
     <div class="row">
       <input type="search" id="plateQ" placeholder="搜尋車牌" autocapitalize="characters">
@@ -120,7 +118,7 @@
 <section id="tab-events" class="panel" hidden>
   <div class="card">
     <div class="row">
-      <input type="date" id="evDate" aria-label="日期">
+      <label class="btn sm datebtn single"><span class="dlabel"></span><input type="date" id="evDate" aria-label="選擇日期"></label>
       <input type="search" id="evQ" placeholder="搜尋車牌" autocapitalize="characters">
     </div>
     <p class="hint">AI 認錯的車牌可以直接修改；方向選「自動」時，系統依同一車牌的前後紀錄判斷進或出。</p>
@@ -170,11 +168,9 @@
       <button class="btn sm" data-frange="yesterday">昨天</button>
       <button class="btn sm" data-frange="7d">近 7 天</button>
       <button class="btn sm" data-frange="month">本月</button>
-    </div>
-    <div class="row">
-      <input type="date" id="feeFrom" aria-label="開始日期">
-      <span>到</span>
-      <input type="date" id="feeTo" aria-label="結束日期">
+      <button class="btn sm datebtn" type="button" data-dates="feeFrom,feeTo" aria-label="選擇起迄日期"></button>
+      <input type="hidden" id="feeFrom">
+      <input type="hidden" id="feeTo">
     </div>
     <div class="row">
       每半小時 <input type="number" id="feeRate" class="num" min="0" step="1" inputmode="numeric"> 元，
@@ -256,6 +252,19 @@
   </div>
   <button class="btn link" id="feeLock">🔒 鎖上合計</button>
 </section>
+
+<dialog id="dateDlg" class="repeat-dlg date-dlg">
+  <form id="dateForm" method="dialog">
+    <div class="repeat-title" style="color:var(--text)">選擇日期</div>
+    <label class="dfield">開始<input type="date" id="dlgFrom"></label>
+    <label class="dfield">結束<input type="date" id="dlgTo"></label>
+    <div class="actions three">
+      <button class="btn" type="button" id="dlgClear">清除</button>
+      <button class="btn" type="button" id="dlgCancel">取消</button>
+      <button class="btn primary" type="submit" autofocus>完成</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="feeDlg" class="repeat-dlg">
   <form id="feeForm">

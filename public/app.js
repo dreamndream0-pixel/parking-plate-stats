@@ -8,6 +8,64 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 
+// ---------- 搜尋框右邊的 × ----------
+const X_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7m0-7l-7 7" stroke="var(--card)" stroke-width="2" stroke-linecap="round"/></svg>';
+$$('input[type="search"]').forEach((inp) => {
+  const wrap = document.createElement('span');
+  wrap.className = 'clearable';
+  inp.before(wrap);
+  wrap.append(inp);
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'clear-x';
+  x.setAttribute('aria-label', '清除搜尋');
+  x.innerHTML = X_SVG;
+  wrap.append(x);
+  const sync = () => { x.hidden = !inp.value; };
+  inp.addEventListener('input', sync);
+  sync();
+  x.addEventListener('click', () => {
+    inp.value = '';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.focus();
+  });
+});
+
+// ---------- 日期按鈕：點開選起迄日 ----------
+const CAL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+const md = (s) => { const [, m, d] = s.split('-'); return `${+m}/${+d}`; };
+function updateDateLabels() {
+  $$('.datebtn[data-dates]').forEach((btn) => {
+    const [f, t] = btn.dataset.dates.split(',').map((id) => $('#' + id).value);
+    const text = !f && !t ? '全部日期' : f === t || !t ? md(f) : !f ? `～${md(t)}` : `${md(f)}～${md(t)}`;
+    btn.innerHTML = `${CAL_SVG}<span>${text}</span>`;
+  });
+  $$('.datebtn.single').forEach((lab) => {
+    const v = $('input', lab).value;
+    $('.dlabel', lab).innerHTML = `${CAL_SVG}<span>${v ? md(v) : '選日期'}</span>`;
+  });
+}
+let dateTarget = null;
+$$('.datebtn[data-dates]').forEach((btn) => btn.addEventListener('click', () => {
+  dateTarget = btn.dataset.dates.split(',').map((id) => $('#' + id));
+  $('#dlgFrom').value = dateTarget[0].value;
+  $('#dlgTo').value = dateTarget[1].value;
+  $('#dateDlg').showModal();
+}));
+function applyDates(f, t) {
+  if (f && !t) t = f;
+  if (t && !f) f = t;
+  if (f > t) [f, t] = [t, f];
+  dateTarget[0].value = f;
+  dateTarget[1].value = t;
+  dateTarget[0].dispatchEvent(new Event('change'));
+  updateDateLabels();
+}
+$('#dateForm').addEventListener('submit', () => applyDates($('#dlgFrom').value, $('#dlgTo').value));
+$('#dlgClear').addEventListener('click', () => { applyDates('', ''); $('#dateDlg').close(); });
+$('#dlgCancel').addEventListener('click', () => $('#dateDlg').close());
+$('#dateDlg').addEventListener('click', (e) => { if (e.target.id === 'dateDlg') $('#dateDlg').close(); });
+
 let password = store.get('pw', '');
 
 async function api(path, opts = {}) {
@@ -320,6 +378,7 @@ function rangeParams() {
 }
 
 async function loadStats() {
+  updateDateLabels();
   const p = rangeParams();
   if ($('#plateQ').value.trim()) p.set('plate', $('#plateQ').value.trim());
   const csv = rangeParams();
@@ -389,6 +448,7 @@ let eTimer;
 $('#evQ').addEventListener('input', () => { clearTimeout(eTimer); eTimer = setTimeout(loadEvents, 300); });
 
 async function loadEvents() {
+  updateDateLabels();
   const p = new URLSearchParams();
   const d = $('#evDate').value;
   if (d) { p.set('from', dayStartIso(d)); p.set('to', dayEndIso(d)); }
@@ -654,6 +714,7 @@ async function fetchFees(pw) {
 const money = (n) => `$${Number(n).toLocaleString('zh-TW')}`;
 let feeLoading = 0;
 async function loadFees() {
+  updateDateLabels();
   if (!feePw) return;
   const my = ++feeLoading;
   let r;
