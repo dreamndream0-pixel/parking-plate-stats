@@ -419,14 +419,15 @@ function renderGap() {
   }
   bar.classList.add('audit');
   bar.innerHTML = `<div class="title">📋 盤點中</div>
-    <div>請把<b>場內每一台車</b>都拍一次（已拍 ${auditCount} 台）。</div>
-    <div class="actions two">
-      <button class="btn primary big" id="auditCamBtn">📷 盤點拍照</button>
-      <button class="btn big" id="auditPickBtn">🖼 相簿選</button>
-    </div>
+    <ol class="steps">
+      <li>用 iPhone 的「相機」App，把<b>場內每一台車</b>的車牌連續拍完</li>
+      <li>回到這裡按下面的按鈕，把剛拍的照片<b>一次全部選起來</b></li>
+      <li>辨識完後按「盤點完成」</li>
+    </ol>
+    <button class="btn primary big" id="auditPickBtn">🖼 從相簿選取盤點照片</button>
+    <div>已上傳 ${auditCount} 台</div>
     <button class="btn big in" id="gapFinish">✔ 盤點完成</button>
     <div class="small">盤點時拍到、原本不在場內的車 → 算離開期間進場；原本在場內、這次沒拍到的車 → 算離開期間出場。盤點時有新車進出，請照常用下面的進場／出場按鈕。</div>`;
-  $('#auditCamBtn').onclick = () => $('#auditCam').click();
   $('#auditPickBtn').onclick = () => $('#auditPick').click();
   $('#gapFinish').onclick = () => {
     if (confirm(`確定盤點完成？場內有拍到 ${auditCount} 台，沒拍到的在場車輛會被算成已出場。`)) gapAction('finish');
@@ -449,7 +450,6 @@ async function gapAction(action) {
   }
 }
 
-$('#auditCam').addEventListener('change', (e) => { handleFiles(e.target.files, true, 'in', gap?.id); e.target.value = ''; });
 $('#auditPick').addEventListener('change', (e) => { handleFiles(e.target.files, false, 'in', gap?.id); e.target.value = ''; });
 
 async function loadGap() {
@@ -457,8 +457,8 @@ async function loadGap() {
     gap = (await api('/api/gap')).gap;
     if (gap?.end_at) {
       // 重新整理後，算回這次盤點已拍幾台
-      const { events } = await api(`/api/events?from=${encodeURIComponent(gap.end_at)}`);
-      auditCount = events.filter((e) => e.gap_id === gap.id).length;
+      const { events } = await api(`/api/events?gap=${gap.id}`);
+      auditCount = events.length;
     }
   } catch {}
   renderGap();

@@ -115,7 +115,9 @@ async function handleApi(req, res, url) {
     if (!open || !open.end_at) return send(res, 400, { error: '還沒按「回來」' });
     const events = await allEvents();
     // 系統說在場內，但回來後沒再拍到 → 空檔期間出場（時間介於最後看到／離開時間 和 回來時間之間）
-    const gone = pairSessions(events).filter((s) => s.status === 'inside' && s.last_seen < open.end_at);
+    // 盤點照片是用相機 App 先拍好再從相簿選的，拍攝時間可能早於按「回來」，所以用「這次盤點有沒有拍到」來判斷
+    const audited = new Set(events.filter((e) => e.gap_id === open.id).map((e) => e.plate));
+    const gone = pairSessions(events).filter((s) => s.status === 'inside' && s.last_seen < open.end_at && !audited.has(s.plate));
     const exited = [];
     for (const s of gone) {
       const from = s.last_seen > open.start_at ? s.last_seen : open.start_at;
@@ -218,13 +220,14 @@ async function handleApi(req, res, url) {
 
   // 事件列表（每張照片）
   if (url.pathname === '/api/events' && req.method === 'GET') {
+    const gapFilter = Number(url.searchParams.get('gap')) || null; // 只看某次盤點的照片
     const from = url.searchParams.get('from');
     const to = url.searchParams.get('to');
     const q = normalizePlate(url.searchParams.get('plate') || '');
     const events = await allEvents();
     const dirs = resolveDirections(events);
     const list = events
-      .filter((e) => inRange(e.taken_at, from, to) && (!q || e.plate.includes(q)))
+      .filter((e) => inRange(e.taken_at, from, to) && (!q || e.plate.includes(q)) && (!gapFilter || e.gap_id === gapFilter))
       .map((e) => ({ ...e, resolved: dirs.get(e.id) }))
       .reverse();
     return send(res, 200, { events: list });

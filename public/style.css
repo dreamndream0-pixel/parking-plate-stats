@@ -119,6 +119,7 @@ dialog::backdrop { background: rgb(0 0 0 / .6); }
 .gapbar.away { background: var(--warn-bg); border-color: var(--warn); }
 .gapbar.audit { border: 2px solid var(--accent); }
 .gapbar .title { font-weight: 700; font-size: 17px; }
+.gapbar .steps { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
 .gapbar .btn.big { font-size: 18px; padding: 16px 8px; }
 .btn.link { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 4px; }
 .tag.est { color: var(--warn); }
