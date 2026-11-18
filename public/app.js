@@ -247,6 +247,108 @@ function askRepeat(e, photo) {
 }
 
 $$('.camInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, true, inp.dataset.dir); e.target.value = ''; }));
+
+// ---------- 網頁相機 ----------
+// 不用 iPhone 內建相機：不會閃光、可預設 2 倍、按一下快門就上傳、可以連續拍。
+// 支援硬體變焦（iOS 17+ 部分機型）就用鏡頭變焦；不支援就裁切畫面中間（數位變焦，畫質較差）。
+const cam = { dir: 'in', stream: null, track: null, hwZoom: null, zoom: Number(store.get('camZoom', '2')), count: 0 };
+
+function camMsg(text) { $('#camMsg').hidden = !text; $('#camMsg').textContent = text || ''; }
+
+async function camStart() {
+  camMsg('');
+  try {
+    cam.stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+    });
+  } catch (e) {
+    camMsg(e.name === 'NotAllowedError' ? '沒有相機權限。請到 Safari 設定允許此網站使用相機，或按右下「用 iPhone 相機」。' : `網頁相機打不開（${e.name || e.message}），請按右下「用 iPhone 相機」。`);
+    return;
+  }
+  cam.track = cam.stream.getVideoTracks()[0];
+  const caps = cam.track.getCapabilities?.() || {};
+  cam.hwZoom = caps.zoom && caps.zoom.max > 1 ? caps.zoom : null;
+  $('#camVideo').srcObject = cam.stream;
+  await $('#camVideo').play().catch(() => {});
+  // 數位變焦最多 2 倍（3 倍太糊）；硬體變焦看鏡頭能到幾倍
+  const maxZ = cam.hwZoom ? cam.hwZoom.max : 2;
+  $$('#camZoom button').forEach((b) => (b.hidden = Number(b.dataset.z) > maxZ));
+  if (cam.zoom > maxZ) cam.zoom = maxZ;
+  await camSetZoom(cam.zoom);
+}
+
+function camStop() {
+  cam.stream?.getTracks().forEach((t) => t.stop());
+  cam.stream = cam.track = null;
+  $('#camVideo').srcObject = null;
+}
+
+async function camSetZoom(z) {
+  cam.zoom = z;
+  store.set('camZoom', String(z));
+  $$('#camZoom button').forEach((b) => b.classList.toggle('on', Number(b.dataset.z) === z));
+  if (cam.hwZoom) {
+    const v = Math.min(cam.hwZoom.max, Math.max(cam.hwZoom.min, z));
+    await cam.track.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
+    $('#camVideo').style.transform = '';
+  } else {
+    $('#camVideo').style.transform = z > 1 ? `scale(${z})` : '';
+  }
+}
+
+function openCam(dir) {
+  cam.dir = dir;
+  cam.count = 0;
+  $('#camDir').textContent = dir === 'in' ? '進場' : '出場';
+  $('#camDir').classList.toggle('out', dir === 'out');
+  $('#camCount').textContent = '對準車牌按白色快門';
+  $('#cam').hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!navigator.mediaDevices?.getUserMedia) return camMsg('這個瀏覽器不支援網頁相機，請按右下「用 iPhone 相機」。');
+  camStart();
+}
+
+function closeCam() {
+  camStop();
+  $('#cam').hidden = true;
+  document.body.style.overflow = '';
+}
+
+async function camShoot() {
+  const v = $('#camVideo');
+  if (!cam.stream || !v.videoWidth) return;
+  const W = v.videoWidth, H = v.videoHeight;
+  const z = cam.hwZoom ? 1 : cam.zoom; // 硬體變焦時畫面本身已放大
+  const sw = Math.round(W / z), sh = Math.round(H / z);
+  const c = document.createElement('canvas');
+  c.width = sw; c.height = sh;
+  c.getContext('2d').drawImage(v, (W - sw) / 2, (H - sh) / 2, sw, sh, 0, 0, sw, sh);
+  $('#camFlash').classList.add('on');
+  setTimeout(() => $('#camFlash').classList.remove('on'), 80);
+  navigator.vibrate?.(30);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+  if (!blob) return;
+  const file = new File([blob], `cam-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  cam.count++;
+  $('#camCount').textContent = `已拍 ${cam.count} 張，上傳中…（${sw}×${sh}）`;
+  handleFiles([file], true, cam.dir).then(() => { $('#camCount').textContent = `已拍 ${cam.count} 張`; });
+}
+
+$$('.camBtn').forEach((b) => b.addEventListener('click', () => openCam(b.dataset.dir)));
+$('#camShot').addEventListener('click', camShoot);
+$('#camClose').addEventListener('click', closeCam);
+$$('#camZoom button').forEach((b) => b.addEventListener('click', () => camSetZoom(Number(b.dataset.z))));
+$('#camNative').addEventListener('click', () => {
+  const dir = cam.dir;
+  closeCam();
+  $(`.camInput[data-dir="${dir}"]`).click();
+});
+// 切到別的 App 再回來，相機畫面會停住 → 重新打開
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) camStop();
+  else if (!$('#cam').hidden) camStart();
+});
 $$('.pickInput').forEach((inp) => inp.addEventListener('change', (e) => { handleFiles(e.target.files, false, inp.dataset.dir); e.target.value = ''; }));
 
 // 單筆事件：車牌（可改）、方向（可改）、時間、刪除
