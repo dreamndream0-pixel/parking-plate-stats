@@ -17,7 +17,13 @@
   <button role="tab" data-tab="upload" aria-selected="true">拍照上傳</button>
   <button role="tab" data-tab="stats">統計</button>
   <button role="tab" data-tab="events">照片紀錄</button>
-  <button role="tab" data-tab="monthly">月租</button>
+  <div class="menu-wrap">
+    <button id="menuBtn" class="menu-btn" aria-label="更多" aria-haspopup="true" aria-expanded="false">☰</button>
+    <div id="menu" class="menu" role="menu" hidden>
+      <button role="menuitem" data-tab="monthly">月租名單</button>
+      <button role="menuitem" data-tab="fees">合計 🔒</button>
+    </div>
+  </div>
 </nav>
 
 <!-- 拍照上傳 -->
@@ -153,6 +159,64 @@
     <div id="mDirty" class="warnbox" hidden>名單有變更，還沒儲存</div>
   </div>
 </section>
+
+<!-- 合計（臨停收費） -->
+<section id="tab-fees" class="panel" hidden>
+  <div class="card">
+    <div class="row">
+      <button class="btn sm" data-frange="today">今天</button>
+      <button class="btn sm" data-frange="yesterday">昨天</button>
+      <button class="btn sm" data-frange="7d">近 7 天</button>
+      <button class="btn sm" data-frange="month">本月</button>
+    </div>
+    <div class="row">
+      <input type="date" id="feeFrom" aria-label="開始日期">
+      <span>到</span>
+      <input type="date" id="feeTo" aria-label="結束日期">
+    </div>
+    <div class="row">
+      每半小時 <input type="number" id="feeRate" class="num" min="0" step="1" inputmode="numeric"> 元，
+      前 <input type="number" id="feeFree" class="num" min="0" step="1" inputmode="numeric"> 分鐘免費
+    </div>
+    <p class="hint">月租車不收費。超過免費時間就從進場開始算，不滿半小時算半小時。</p>
+  </div>
+
+  <div class="kpis three">
+    <div class="kpi"><div class="k">已出場收費</div><div class="v" id="fExited">–</div></div>
+    <div class="kpi"><div class="k">在場應收（算到現在）</div><div class="v" id="fInside">–</div></div>
+    <div class="kpi total"><div class="k">合計</div><div class="v" id="fTotal">–</div></div>
+  </div>
+  <p class="hint" id="fNote"></p>
+
+  <div class="card">
+    <div class="label">收費分布（已出場）</div>
+    <div id="fDist" class="dist"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">每台車</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>車牌</th><th>進場</th><th>出場</th><th>停留</th><th>金額</th></tr></thead>
+        <tbody id="fBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <button class="btn link" id="feeLock">🔒 鎖上合計</button>
+</section>
+
+<dialog id="feeDlg" class="repeat-dlg">
+  <form id="feeForm">
+    <div class="repeat-title" style="color:var(--text)">🔒 合計</div>
+    <p class="small">請輸入合計密碼</p>
+    <input id="feePw" type="password" inputmode="numeric" autocomplete="off" class="plate-input manual">
+    <p id="feeErr" class="err small"></p>
+    <div class="actions two">
+      <button class="btn big primary" type="submit">打開</button>
+      <button class="btn big" type="button" id="feeCancel">取消</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="repeatDlg" class="repeat-dlg">
   <div class="repeat-title">⚠ 車號已在場內</div>

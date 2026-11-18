@@ -9,6 +9,7 @@ import { createStore } from './lib/store.js';
 import { pairSessions, resolveDirections, normalizePlate } from './lib/pairing.js';
 import { recognizePlates, mockRecognize } from './lib/recognize.js';
 import { buildMatcher, normalizeMask, readMonthlyList } from './lib/monthly.js';
+import { summarizeFees, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(ROOT, 'data');
@@ -16,6 +17,8 @@ const DATA = path.join(ROOT, 'data');
 const MOCK = process.argv.includes('--mock');
 const PORT = Number(process.env.PORT) || 3000;
 const PASSWORD = process.env.APP_PASSWORD || '';
+// 「合計」（收費金額）另外一道密碼
+const FEE_PASSWORD = process.env.FEE_PASSWORD || '12345';
 
 if (!MOCK && !process.env.ANTHROPIC_API_KEY) {
   console.warn('⚠ 沒有設定 ANTHROPIC_API_KEY，上傳照片時 AI 辨識會失敗。請建立 .env（參考 .env.example），或用 npm run mock 測試。');
@@ -322,6 +325,21 @@ async function handleApi(req, res, url) {
       },
       sessions: list,
     });
+  }
+
+  // 合計（臨停收費），要另外的合計密碼
+  if (url.pathname === '/api/fees' && req.method === 'GET') {
+    const given = Buffer.from(String(req.headers['x-fee-password'] || ''));
+    const want = Buffer.from(FEE_PASSWORD);
+    if (!(given.length === want.length && crypto.timingSafeEqual(given, want))) return send(res, 403, { error: '合計密碼錯誤' });
+    const num = (k, d) => { const raw = url.searchParams.get(k); const v = Number(raw); return raw && Number.isFinite(v) && v >= 0 ? v : d; };
+    const rate = num('rate', DEFAULT_RATE);
+    const freeMin = num('free', DEFAULT_FREE_MIN);
+    const monthly = await monthlyMatcher();
+    const sessions = pairSessions(await allEvents()).map((s) => ({ ...s, monthly: monthly(s.plate) }));
+    const now = Date.now();
+    const result = summarizeFees(sessions, { from: url.searchParams.get('from'), to: url.searchParams.get('to'), now, rate, freeMin });
+    return send(res, 200, { rate, freeMin, now: new Date(now).toISOString(), ...result });
   }
 
   // 匯出 CSV

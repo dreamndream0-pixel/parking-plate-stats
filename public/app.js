@@ -53,15 +53,32 @@ const STATUS = {
 };
 
 // ---------- 分頁 ----------
-function showTab(name) {
-  $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name));
+async function showTab(name) {
+  closeMenu();
+  // 合計要先輸入密碼，取消就留在原本的分頁
+  if (name === 'fees' && !feePw && !(await askFeePw())) return;
+  $$('.tabs > button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name));
+  $$('#menu button').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === name));
+  $('#menuBtn').classList.toggle('active', ['monthly', 'fees'].includes(name));
   $$('.panel').forEach((p) => (p.hidden = p.id !== `tab-${name}`));
-  store.set('tab', name);
+  if (name !== 'fees') store.set('tab', name); // 合計不記住，下次打開網頁不會直接停在合計
   if (name === 'stats') loadStats();
   if (name === 'events') loadEvents();
   if (name === 'monthly') loadMonthly();
+  if (name === 'fees') loadFees();
 }
-$$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+$$('.tabs > button, #menu button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ---------- 漢堡選單 ----------
+function closeMenu() { $('#menu').hidden = true; $('#menuBtn').setAttribute('aria-expanded', 'false'); }
+$('#menuBtn').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  const open = $('#menu').hidden;
+  $('#menu').hidden = !open;
+  $('#menuBtn').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (ev) => { if (!ev.target.closest('.menu-wrap')) closeMenu(); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeMenu(); });
 
 // ---------- 方向 ----------
 
@@ -583,6 +600,110 @@ async function loadGap() {
   renderGap();
 }
 setInterval(() => { if (gap && !gap.end_at) renderGap(); }, 60000);
+
+// ---------- 合計（臨停收費） ----------
+// 合計密碼只放在記憶體：重新整理網頁或按「鎖上」就要重新輸入
+let feePw = '';
+function askFeePw(error = '') {
+  const dlg = $('#feeDlg');
+  $('#feePw').value = '';
+  $('#feeErr').textContent = error;
+  dlg.showModal();
+  setTimeout(() => $('#feePw').focus(), 50);
+  return new Promise((resolve) => {
+    const done = (ok) => {
+      $('#feeForm').onsubmit = null;
+      $('#feeCancel').onclick = null;
+      dlg.oncancel = null;
+      dlg.close();
+      resolve(ok);
+    };
+    $('#feeForm').onsubmit = async (ev) => {
+      ev.preventDefault();
+      const pw = $('#feePw').value.trim();
+      if (!pw) return;
+      try {
+        await fetchFees(pw);
+        feePw = pw;
+        done(true);
+      } catch (e) {
+        $('#feeErr').textContent = e.message;
+        $('#feePw').select();
+      }
+    };
+    $('#feeCancel').onclick = () => done(false);
+    dlg.oncancel = () => done(false);
+  });
+}
+
+async function fetchFees(pw) {
+  const p = new URLSearchParams();
+  const f = $('#feeFrom').value, t = $('#feeTo').value;
+  if (f) p.set('from', dayStartIso(f));
+  if (t) p.set('to', dayEndIso(t));
+  p.set('rate', $('#feeRate').value || '15');
+  p.set('free', $('#feeFree').value || '15');
+  return api(`/api/fees?${p}`, { headers: { 'X-Fee-Password': pw } });
+}
+
+const money = (n) => `$${Number(n).toLocaleString('zh-TW')}`;
+let feeLoading = 0;
+async function loadFees() {
+  if (!feePw) return;
+  const my = ++feeLoading;
+  let r;
+  try {
+    r = await fetchFees(feePw);
+  } catch (e) {
+    if (/合計密碼/.test(e.message)) { feePw = ''; if (await askFeePw(e.message)) return loadFees(); return showTab('upload'); }
+    $('#fNote').textContent = e.message;
+    return;
+  }
+  if (my !== feeLoading) return;
+  $('#fExited').textContent = money(r.exited.amount);
+  $('#fInside').textContent = money(r.inside.amount);
+  $('#fTotal').textContent = money(r.total);
+  const nowTxt = fmtTime(r.now).slice(6, 11);
+  const note = [`已出場 ${r.exited.count} 台（其中 ${r.exited.free} 台免費）`, `在場 ${r.inside.count} 台算到 ${nowTxt}`];
+  if (r.monthly) note.push(`月租 ${r.monthly} 台不收費`);
+  if (r.missingEntry || r.missingExit) note.push(`缺進場 ${r.missingEntry} 台、缺出場 ${r.missingExit} 台算不出金額`);
+  $('#fNote').textContent = note.join('；');
+
+  const max = Math.max(1, ...r.dist.map((d) => d.count));
+  $('#fDist').innerHTML = r.dist.length
+    ? r.dist.map((d) => `<div class="r"><span>${d.fee ? money(d.fee) : '免費'}</span><div class="bar" style="width:${(d.count / max) * 100}%"></div><span class="n">${d.count} 台</span></div>`).join('')
+    : '<span class="small">沒有已出場的臨停車</span>';
+  $('#fBody').innerHTML = r.rows.map((x) => `<tr>
+    <td><span class="plate">${esc(x.plate)}</span></td>
+    <td>${fmtTime(x.entry_time)}</td>
+    <td>${x.exit_time ? fmtTime(x.exit_time) : '<span class="tag in">在場內</span>'}</td>
+    <td>${fmtDur(x.minutes)}</td>
+    <td class="money">${x.fee ? money(x.fee) : '免費'}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="small">沒有資料</td></tr>';
+}
+
+function setFeeRange(kind) {
+  const today = new Date();
+  const d = (n) => { const x = new Date(today); x.setDate(x.getDate() + n); return localDate(x); };
+  if (kind === 'today') { $('#feeFrom').value = d(0); $('#feeTo').value = d(0); }
+  if (kind === 'yesterday') { $('#feeFrom').value = d(-1); $('#feeTo').value = d(-1); }
+  if (kind === '7d') { $('#feeFrom').value = d(-6); $('#feeTo').value = d(0); }
+  if (kind === 'month') { $('#feeFrom').value = localDate(new Date(today.getFullYear(), today.getMonth(), 1)); $('#feeTo').value = d(0); }
+  loadFees();
+}
+$$('[data-frange]').forEach((b) => b.addEventListener('click', () => setFeeRange(b.dataset.frange)));
+['#feeFrom', '#feeTo'].forEach((s) => $(s).addEventListener('change', loadFees));
+$('#feeRate').value = store.get('feeRate', '15');
+$('#feeFree').value = store.get('feeFree', '15');
+let feeTimer;
+['#feeRate', '#feeFree'].forEach((s) => $(s).addEventListener('input', () => {
+  store.set('feeRate', $('#feeRate').value);
+  store.set('feeFree', $('#feeFree').value);
+  clearTimeout(feeTimer);
+  feeTimer = setTimeout(loadFees, 400);
+}));
+$('#feeLock').addEventListener('click', () => { feePw = ''; showTab('upload'); });
+setFeeRange('today');
 
 // ---------- 啟動 ----------
 loadGap();
