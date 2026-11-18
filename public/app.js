@@ -248,11 +248,15 @@ async function loadStats() {
   const warn = [];
   if (s.missingExit) warn.push(`${s.missingExit} 筆缺出場紀錄`);
   if (s.missingEntry) warn.push(`${s.missingEntry} 筆缺進場紀錄`);
-  $('#anomaly').textContent = `共 ${s.uniquePlates} 台車` + (warn.length ? `；${warn.join('、')}（可能漏拍或車牌認錯，請到「照片紀錄」檢查）` : '');
-
   // 每小時圖表（用本機時區）
   const from = p.get('from'), to = p.get('to');
   const inR = (iso) => iso && (!from || iso >= from) && (!to || iso < to);
+
+  // 重複拍的照片（在場內又拍進場、出場後又拍出場）不算進出場次數
+  const repeats = data.sessions.reduce((n, x) => n + x.checks.filter((c) => inR(c.time)).length + x.repeat_exits.filter((c) => inR(c.time)).length, 0);
+  $('#anomaly').textContent = `共 ${s.uniquePlates} 台車`
+    + (repeats ? `；另有 ${repeats} 張重複拍的照片（不算進出場）` : '')
+    + (warn.length ? `；${warn.join('、')}（可能漏拍或車牌認錯，請到「照片紀錄」檢查）` : '');
   const hin = Array(24).fill(0), hout = Array(24).fill(0);
   for (const x of data.sessions) {
     if (inR(x.entry_time)) hin[new Date(x.entry_time).getHours()]++;
