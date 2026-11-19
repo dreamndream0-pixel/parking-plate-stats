@@ -2,6 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { feeFor, summarizeFees, dailyReport } from '../lib/fees.js';
 
+test('平均不算盤點推估的車，但收入照算', () => {
+  const sessions = [
+    { plate: 'A', status: 'done', entry_time: '2026-11-18T01:00:00Z', exit_time: '2026-11-18T02:00:00Z', monthly: null },
+    { plate: 'G', status: 'done', entry_time: '2026-11-18T01:00:00Z', exit_time: '2026-11-18T06:00:00Z', exit_estimated_from: '2026-11-18T03:00:00Z', monthly: null },
+  ];
+  const r = summarizeFees(sessions, { now: Date.parse('2026-11-18T08:00:00Z') });
+  assert.equal(r.exited.count, 2);
+  assert.equal(r.exited.amount, 30 + 150);
+  assert.equal(r.exited.avgFee, 30);
+  assert.equal(r.exited.avgMin, 60);
+  assert.equal(r.exited.estimated, 1);
+});
+
 test('每天收入與使用率', () => {
   // 台灣 11/18：A 09:00–10:00（臨停 $30）、B 09:30–10:30（月租）、C 10:00 進場還在（現在 11:00，應收 $30）
   const now = Date.parse('2026-11-18T03:00:00Z');
@@ -43,7 +56,7 @@ test('合計：月租不收、在場算到現在', () => {
     { plate: 'EEE-5555', status: 'missing_entry', entry_time: null, exit_time: '2026-11-18T03:00:00Z', monthly: null },
   ];
   const r = summarizeFees(sessions, { now });
-  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1, avgFee: 23, avgMin: 40 });
+  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1, avgFee: 23, avgMin: 40, estimated: 0 });
   assert.deepEqual(r.inside, { count: 1, amount: 30 });
   assert.equal(r.total, 75);
   assert.equal(r.monthly, 1);

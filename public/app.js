@@ -731,7 +731,9 @@ async function loadFees() {
   $('#fTotal').textContent = money(r.total);
   $('#fAvgFee').textContent = r.exited.count ? money(r.exited.avgFee) : '–';
   $('#fAvgDur').textContent = r.exited.count ? `${(r.exited.avgMin / 60).toFixed(1)} 小時` : '–';
-  $('#fAvgDurSub').textContent = r.exited.count ? `約 ${fmtDur(r.exited.avgMin)}` : '';
+  const est = r.exited.estimated ? `（不含盤點 ${r.exited.estimated} 台）` : '';
+  $('#fAvgFeeSub').textContent = `已出場臨停車${est}`;
+  $('#fAvgDurSub').textContent = r.exited.count ? `約 ${fmtDur(r.exited.avgMin)}${est}` : '';
   const nowTxt = fmtTime(r.now).slice(6, 11);
   const note = [`已出場 ${r.exited.count} 台（其中 ${r.exited.free} 台免費）`, `在場 ${r.inside.count} 台算到 ${nowTxt}`];
   if (r.monthly) note.push(`月租 ${r.monthly} 台不收費`);

@@ -301,7 +301,8 @@ async function handleApi(req, res, url) {
     const entries = sessions.filter((s) => s.entry_time && inRange(s.entry_time, from, to)).length;
     const exits = sessions.filter((s) => s.exit_time && inRange(s.exit_time, from, to)).length;
     const insideNow = sessions.filter((s) => s.status === 'inside').length;
-    const done = list.filter((s) => s.duration_min != null);
+    // 平均停留不算盤點推估的車（進場或出場時間是員工離開期間推估的，不準）
+    const done = list.filter((s) => s.duration_min != null && !s.entry_estimated_from && !s.exit_estimated_from);
     const avg = done.length ? Math.round(done.reduce((a, s) => a + s.duration_min, 0) / done.length) : null;
 
     // 每小時進/出（給圖表用；小時以伺服器時區計算，前端會用自己的時區重算）
