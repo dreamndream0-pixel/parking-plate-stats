@@ -253,38 +253,6 @@ async function uploadOne(job) {
 
 // 「車號已在場內」通知：一次跳一個，多張時依序排隊
 let askChain = Promise.resolve();
-// ---------- 手動輸入車牌 ----------
-async function manualAdd(direction) {
-  const input = $('#manualPlate');
-  const plate = input.value.trim();
-  if (!plate) { input.focus(); return; }
-  const li = document.createElement('li');
-  li.className = 'item';
-  li.innerHTML = `<div class="nophoto">手動<br>輸入</div><div class="meta"><div>記錄中…</div></div>`;
-  $('#queue').prepend(li);
-  const meta = $('.meta', li);
-  try {
-    const r = await api('/api/manual', { method: 'POST', body: JSON.stringify({ plate, direction }) });
-    input.value = '';
-    const head = `<div class="small">${esc(fmtTime(r.takenAt))}・${SRC_TEXT.typed}</div>`;
-    const render = () => { meta.innerHTML = head + r.events.map(eventRow).join(''); bindEventRows(meta); };
-    render();
-    for (const e of r.events) {
-      if (e.resolved !== 'recheck') continue;
-      askRepeat(e, '').then(async (toExit) => {
-        if (!toExit) return;
-        await api(`/api/events/${e.id}`, { method: 'PATCH', body: JSON.stringify({ direction: 'out' }) });
-        Object.assign(e, { direction: 'out', resolved: 'out', repeat: '已改為出場' });
-        render();
-      }).catch((err) => alert(err.message));
-    }
-  } catch (err) {
-    meta.innerHTML = `<div class="err">記錄失敗：${esc(err.message)}</div>`;
-  }
-}
-$('#manualIn').addEventListener('click', () => manualAdd('in'));
-$('#manualOut').addEventListener('click', () => manualAdd('out'));
-
 function askRepeat(e, photo) {
   const ask = () => new Promise((resolve) => {
     const dlg = $('#repeatDlg');
