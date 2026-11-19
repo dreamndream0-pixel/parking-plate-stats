@@ -9,7 +9,7 @@ import { createStore } from './lib/store.js';
 import { pairSessions, resolveDirections, normalizePlate } from './lib/pairing.js';
 import { recognizePlates, mockRecognize } from './lib/recognize.js';
 import { buildMatcher, normalizeMask, readMonthlyList } from './lib/monthly.js';
-import { summarizeFees, dailyReport, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
+import { summarizeFees, dailyReport, isRough, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(ROOT, 'data');
@@ -301,8 +301,8 @@ async function handleApi(req, res, url) {
     const entries = sessions.filter((s) => s.entry_time && inRange(s.entry_time, from, to)).length;
     const exits = sessions.filter((s) => s.exit_time && inRange(s.exit_time, from, to)).length;
     const insideNow = sessions.filter((s) => s.status === 'inside').length;
-    // 平均停留不算盤點推估的車（進場或出場時間是員工離開期間推估的，不準）
-    const done = list.filter((s) => s.duration_min != null && !s.entry_estimated_from && !s.exit_estimated_from);
+    // 平均停留不算盤點推估的車（員工離開超過 30 分鐘，進場或出場時間不準）；只離開一下的照算
+    const done = list.filter((s) => s.duration_min != null && !isRough(s));
     const avg = done.length ? Math.round(done.reduce((a, s) => a + s.duration_min, 0) / done.length) : null;
 
     // 每小時進/出（給圖表用；小時以伺服器時區計算，前端會用自己的時區重算）

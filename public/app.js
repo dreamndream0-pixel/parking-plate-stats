@@ -734,7 +734,7 @@ async function loadFees() {
   const est = r.estimated.count ? `（不含盤點 ${r.estimated.count} 台）` : '';
   // 盤點推估的車：出場（或進場）時間不確定，不算進上面的收費，另外列出可能的範圍
   $('#fEst').hidden = !r.estimated.count;
-  $('#fEst').innerHTML = `盤點推估 <b>${r.estimated.count} 台</b>：<b>${money(r.estimated.min)} ～ ${money(r.estimated.max)}</b><div class="small">員工離開期間進出的車，確切時間不知道，沒有算進上面的收費與合計。</div>`;
+  $('#fEst').innerHTML = `盤點推估 <b>${r.estimated.count} 台</b>：<b>${money(r.estimated.min)} ～ ${money(r.estimated.max)}</b><div class="small">員工離開超過 30 分鐘期間進出的車，確切時間不知道，沒有算進上面的收費與合計。</div>`;
   $('#fAvgFeeSub').textContent = `已出場臨停車${est}`;
   $('#fAvgDurSub').textContent = r.exited.count ? `約 ${fmtDur(r.exited.avgMin)}${est}` : '';
   const nowTxt = fmtTime(r.now).slice(6, 11);

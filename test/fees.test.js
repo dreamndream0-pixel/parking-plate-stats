@@ -24,6 +24,20 @@ test('盤點時才拍到的車：進場時間是推估的', () => {
   assert.equal(feeRange({ entry_time: s.entry_time, exit_time: s.exit_time }), null);
 });
 
+test('員工只離開一下的盤點車照常算（取中間時間）', () => {
+  // 09:00 進場，員工 10:00～10:20 離開期間出場 → 當作 10:10 出場，停 70 分 $45
+  const sessions = [
+    { plate: 'S', status: 'done', entry_time: '2026-11-18T01:00:00Z', exit_time: '2026-11-18T02:20:00Z', exit_estimated_from: '2026-11-18T02:00:00Z', monthly: null },
+  ];
+  assert.equal(feeRange(sessions[0]), null);
+  const r = summarizeFees(sessions, { now: Date.parse('2026-11-18T08:00:00Z') });
+  assert.deepEqual(r.exited, { count: 1, amount: 45, free: 0, avgFee: 45, avgMin: 70 });
+  assert.equal(r.estimated.count, 0);
+  const [d] = dailyReport(sessions, { from: '2026-11-17T16:00:00Z', to: '2026-11-18T16:00:00Z', now: Date.parse('2026-11-18T08:00:00Z') });
+  assert.equal(d.revenue, 45);
+  assert.equal(d.estCars, 0);
+});
+
 test('每天收入與使用率', () => {
   // 台灣 11/18：A 09:00–10:00（臨停 $30）、B 09:30–10:30（月租）、C 10:00 進場還在（現在 11:00，應收 $30）
   const now = Date.parse('2026-11-18T03:00:00Z');
