@@ -80,6 +80,12 @@
     <div class="kpi"><div class="k">臨停</div><div class="v" id="kTemp">–</div><div class="small" id="kTempSub"></div></div>
   </div>
 
+  <div class="card">
+    <div class="label">每小時進出車次</div>
+    <div id="chart" class="chart"></div>
+    <div class="legend"><span class="sw in"></span>進場 <span class="sw out"></span>出場</div>
+  </div>
+
   <div class="card filters">
     <div class="row">
       <button class="btn sm" data-range="today">今天</button>
@@ -96,12 +102,6 @@
     </div>
   </div>
   <p class="hint" id="anomaly"></p>
-
-  <div class="card">
-    <div class="label">每小時進出車次</div>
-    <div id="chart" class="chart"></div>
-    <div class="legend"><span class="sw in"></span>進場 <span class="sw out"></span>出場</div>
-  </div>
 
   <div class="card">
     <div class="label">停車紀錄（進場 ↔ 出場配對）</div>
