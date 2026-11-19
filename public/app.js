@@ -731,7 +731,10 @@ async function loadFees() {
   $('#fTotal').textContent = money(r.total);
   $('#fAvgFee').textContent = r.exited.count ? money(r.exited.avgFee) : '–';
   $('#fAvgDur').textContent = r.exited.count ? `${(r.exited.avgMin / 60).toFixed(1)} 小時` : '–';
-  const est = r.exited.estimated ? `（不含盤點 ${r.exited.estimated} 台）` : '';
+  const est = r.estimated.count ? `（不含盤點 ${r.estimated.count} 台）` : '';
+  // 盤點推估的車：出場（或進場）時間不確定，不算進上面的收費，另外列出可能的範圍
+  $('#fEst').hidden = !r.estimated.count;
+  $('#fEst').innerHTML = `盤點推估 <b>${r.estimated.count} 台</b>：<b>${money(r.estimated.min)} ～ ${money(r.estimated.max)}</b><div class="small">員工離開期間進出的車，確切時間不知道，沒有算進上面的收費與合計。</div>`;
   $('#fAvgFeeSub').textContent = `已出場臨停車${est}`;
   $('#fAvgDurSub').textContent = r.exited.count ? `約 ${fmtDur(r.exited.avgMin)}${est}` : '';
   const nowTxt = fmtTime(r.now).slice(6, 11);
@@ -751,7 +754,7 @@ async function loadFees() {
     <td>${fmtTime(x.entry_time)}</td>
     <td>${x.exit_time ? fmtTime(x.exit_time) : '<span class="tag in">在場內</span>'}</td>
     <td>${fmtDur(x.minutes)}</td>
-    <td class="money">${x.fee ? money(x.fee) : '免費'}</td>
+    <td class="money">${x.estimated ? `<span class="tag est">盤點</span><div class="small">${money(x.feeMin)}～${money(x.feeMax)}</div>` : x.fee ? money(x.fee) : '免費'}</td>
   </tr>`).join('') || '<tr><td colspan="5" class="small">沒有資料</td></tr>';
 }
 
@@ -815,7 +818,7 @@ function renderUsage(r) {
     <td>${d.date.slice(5).replace('-', '/')}${d.today ? ' <span class="tag in">今天</span>' : ''}</td>
     <td>${d.tempEntries}</td>
     <td>${d.monthlyEntries}</td>
-    <td class="money">${money(d.revenue)}${d.today && d.pending ? `<div class="small">＋在場 ${money(d.pending)}</div>` : ''}</td>
+    <td class="money">${money(d.revenue)}${d.today && d.pending ? `<div class="small">＋在場 ${money(d.pending)}</div>` : ''}${d.estCars ? `<div class="small">盤點 ${d.estCars} 台 ${money(d.estMin)}～${money(d.estMax)} 未計</div>` : ''}</td>
     <td>${d.peak} 台${cap ? ` <span class="small">${pct(d.peak)}</span>` : ''}</td>
     <td>${d.avgInside} 台${cap ? ` <span class="small">${pct(d.avgInside)}</span>` : ''}</td>
   </tr>`).join('') || '<tr><td colspan="6" class="small">沒有資料</td></tr>';

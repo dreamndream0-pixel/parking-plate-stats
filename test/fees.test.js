@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feeFor, summarizeFees, dailyReport } from '../lib/fees.js';
+import { feeFor, feeRange, summarizeFees, dailyReport } from '../lib/fees.js';
 
 test('平均不算盤點推估的車，但收入照算', () => {
   const sessions = [
@@ -8,11 +8,20 @@ test('平均不算盤點推估的車，但收入照算', () => {
     { plate: 'G', status: 'done', entry_time: '2026-11-18T01:00:00Z', exit_time: '2026-11-18T06:00:00Z', exit_estimated_from: '2026-11-18T03:00:00Z', monthly: null },
   ];
   const r = summarizeFees(sessions, { now: Date.parse('2026-11-18T08:00:00Z') });
-  assert.equal(r.exited.count, 2);
-  assert.equal(r.exited.amount, 30 + 150);
-  assert.equal(r.exited.avgFee, 30);
-  assert.equal(r.exited.avgMin, 60);
-  assert.equal(r.exited.estimated, 1);
+  // G 實際出場在 11:00～14:00 之間：最少停 2 小時 $60，最多 5 小時 $150
+  assert.deepEqual(r.exited, { count: 1, amount: 30, free: 0, avgFee: 30, avgMin: 60 });
+  assert.deepEqual(r.estimated, { count: 1, min: 60, max: 150 });
+  assert.equal(r.total, 30);
+  const [d] = dailyReport(sessions, { from: '2026-11-17T16:00:00Z', to: '2026-11-18T16:00:00Z', now: Date.parse('2026-11-18T08:00:00Z') });
+  assert.equal(d.revenue, 30);
+  assert.deepEqual([d.estCars, d.estMin, d.estMax], [1, 60, 150]);
+});
+
+test('盤點時才拍到的車：進場時間是推估的', () => {
+  // 員工 19:00 離開，隔天 08:30 盤點拍到（進場記 08:30），09:00 出場 → 最少 30 分 $15，最多 14 小時 $420
+  const s = { entry_time: '2026-11-19T00:30:00Z', entry_estimated_from: '2026-11-18T11:00:00Z', exit_time: '2026-11-19T01:00:00Z' };
+  assert.deepEqual(feeRange(s), { min: 15, max: 420 });
+  assert.equal(feeRange({ entry_time: s.entry_time, exit_time: s.exit_time }), null);
 });
 
 test('每天收入與使用率', () => {
@@ -56,7 +65,7 @@ test('合計：月租不收、在場算到現在', () => {
     { plate: 'EEE-5555', status: 'missing_entry', entry_time: null, exit_time: '2026-11-18T03:00:00Z', monthly: null },
   ];
   const r = summarizeFees(sessions, { now });
-  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1, avgFee: 23, avgMin: 40, estimated: 0 });
+  assert.deepEqual(r.exited, { count: 2, amount: 45, free: 1, avgFee: 23, avgMin: 40 });
   assert.deepEqual(r.inside, { count: 1, amount: 30 });
   assert.equal(r.total, 75);
   assert.equal(r.monthly, 1);
