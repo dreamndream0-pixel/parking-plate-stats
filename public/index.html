@@ -71,6 +71,15 @@
 
 <!-- 統計 -->
 <section id="tab-stats" class="panel" hidden>
+  <div class="kpis strip">
+    <div class="kpi"><div class="k">進場</div><div class="v" id="kIn">–</div></div>
+    <div class="kpi"><div class="k">出場</div><div class="v" id="kOut">–</div></div>
+    <div class="kpi"><div class="k">在場</div><div class="v" id="kInside">–</div></div>
+    <div class="kpi"><div class="k">平均</div><div class="v" id="kAvg">–</div></div>
+    <div class="kpi monthly"><div class="k">月租</div><div class="v" id="kMonthly">–</div><div class="small" id="kMonthlySub"></div></div>
+    <div class="kpi"><div class="k">臨停</div><div class="v" id="kTemp">–</div><div class="small" id="kTempSub"></div></div>
+  </div>
+
   <div class="card filters">
     <div class="row">
       <button class="btn sm" data-range="today">今天</button>
@@ -85,15 +94,6 @@
       <input type="search" id="plateQ" placeholder="搜尋車牌" autocapitalize="characters">
       <a class="btn sm" id="csvBtn" href="#">匯出 Excel (CSV)</a>
     </div>
-  </div>
-
-  <div class="kpis">
-    <div class="kpi"><div class="k">進場</div><div class="v" id="kIn">–</div></div>
-    <div class="kpi"><div class="k">出場</div><div class="v" id="kOut">–</div></div>
-    <div class="kpi"><div class="k">目前在場</div><div class="v" id="kInside">–</div></div>
-    <div class="kpi"><div class="k">平均停留</div><div class="v" id="kAvg">–</div></div>
-    <div class="kpi monthly"><div class="k">月租車</div><div class="v" id="kMonthly">–</div><div class="small" id="kMonthlySub"></div></div>
-    <div class="kpi"><div class="k">臨停車</div><div class="v" id="kTemp">–</div><div class="small" id="kTempSub"></div></div>
   </div>
   <p class="hint" id="anomaly"></p>
 

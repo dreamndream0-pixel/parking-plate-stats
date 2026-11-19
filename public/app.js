@@ -392,11 +392,11 @@ async function loadStats() {
   $('#kIn').textContent = s.entries;
   $('#kOut').textContent = s.exits;
   $('#kInside').textContent = s.insideNow;
-  $('#kAvg').textContent = s.avgDurationMin == null ? '—' : fmtDur(s.avgDurationMin);
-  $('#kMonthly').textContent = `${s.monthlyEntries} 台`;
-  $('#kMonthlySub').textContent = `目前在場 ${s.monthlyInside} 台`;
-  $('#kTemp').textContent = `${s.tempEntries} 台`;
-  $('#kTempSub').textContent = `目前在場 ${s.tempInside} 台`;
+  $('#kAvg').textContent = s.avgDurationMin == null ? '—' : s.avgDurationMin < 60 ? `${s.avgDurationMin}分` : `${(s.avgDurationMin / 60).toFixed(1)}時`;
+  $('#kMonthly').textContent = s.monthlyEntries;
+  $('#kMonthlySub').textContent = `在場 ${s.monthlyInside}`;
+  $('#kTemp').textContent = s.tempEntries;
+  $('#kTempSub').textContent = `在場 ${s.tempInside}`;
   const warn = [];
   if (s.missingExit) warn.push(`${s.missingExit} 筆缺出場紀錄`);
   if (s.missingEntry) warn.push(`${s.missingEntry} 筆缺進場紀錄`);
