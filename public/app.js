@@ -860,3 +860,11 @@ loadGap();
 api('/api/config').then((c) => { $('#mockBadge').hidden = !c.mock; });
 setRange('today');
 showTab(store.get('tab', 'upload'));
+
+// 篩選列固定在分頁列正下方：量分頁列的高度給 CSS 用
+{
+  const tabs = $('.tabs');
+  const setH = () => document.documentElement.style.setProperty('--tabs-h', `${tabs.offsetHeight}px`);
+  setH();
+  if (window.ResizeObserver) new ResizeObserver(setH).observe(tabs);
+}
