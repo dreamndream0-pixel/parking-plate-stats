@@ -682,7 +682,7 @@ async function fetchFees(pw) {
   return api(`/api/fees?${feeParams()}`, { headers: { 'X-Fee-Password': pw } });
 }
 
-// 匯出 Excel 收入報表（每日統計＋停車明細），用目前選的日期和費率
+// 匯出 Excel：目前選的日期範圍內的原始進出資料
 $('#feeXlsx').addEventListener('click', async () => {
   const btn = $('#feeXlsx');
   const label = btn.textContent;
@@ -693,7 +693,7 @@ $('#feeXlsx').addEventListener('click', async () => {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `錯誤 ${res.status}`);
     const blob = await res.blob();
     const f = $('#feeFrom').value, t = $('#feeTo').value;
-    const name = `停車收入報表${f ? `_${f}` : ''}${t && t !== f ? `_${t}` : ''}.xlsx`;
+    const name = `停車紀錄${f ? `_${f}` : ''}${t && t !== f ? `_${t}` : ''}.xlsx`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;

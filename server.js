@@ -9,7 +9,7 @@ import { createStore } from './lib/store.js';
 import { pairSessions, resolveDirections, normalizePlate } from './lib/pairing.js';
 import { recognizePlates, mockRecognize } from './lib/recognize.js';
 import { buildMatcher, normalizeMask, readMonthlyList } from './lib/monthly.js';
-import { classifySessions, buildReportXlsx } from './lib/report.js';
+import { rawRows, buildRawXlsx } from './lib/report.js';
 import { summarizeFees, dailyReport, isRough, DEFAULT_RATE, DEFAULT_FREE_MIN } from './lib/fees.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -346,22 +346,17 @@ async function handleApi(req, res, url) {
     return send(res, 200, { rate, freeMin, now: new Date(now).toISOString(), ...result, days });
   }
 
-  // 匯出 Excel 收入報表（合計密碼）：每日統計＋停車明細
+  // 匯出 Excel（合計密碼）：只放原始進出資料
   if (url.pathname === '/api/report.xlsx' && req.method === 'GET') {
     const given = Buffer.from(String(req.headers['x-fee-password'] || ''));
     const want = Buffer.from(FEE_PASSWORD);
     if (!(given.length === want.length && crypto.timingSafeEqual(given, want))) return send(res, 403, { error: '合計密碼錯誤' });
-    const num = (k, d) => { const raw = url.searchParams.get(k); const v = Number(raw); return raw && Number.isFinite(v) && v >= 0 ? v : d; };
-    const rate = num('rate', DEFAULT_RATE);
-    const freeMin = num('free', DEFAULT_FREE_MIN);
-    const tzOffsetMin = num('tzo', 480);
-    const monthly = await monthlyMatcher();
-    const sessions = pairSessions(await allEvents()).map((s) => ({ ...s, monthly: monthly(s.plate) }));
-    const rows = classifySessions(sessions, { from: url.searchParams.get('from'), to: url.searchParams.get('to'), rate, freeMin, tzOffsetMin });
-    const buf = await buildReportXlsx(rows, { rate, freeMin, tzOffsetMin });
+    const tzo = Number(url.searchParams.get('tzo'));
+    const rows = rawRows(pairSessions(await allEvents()), { from: url.searchParams.get('from'), to: url.searchParams.get('to') });
+    const buf = await buildRawXlsx(rows, { tzOffsetMin: Number.isFinite(tzo) && url.searchParams.get('tzo') ? tzo : 480 });
     return send(res, 200, buf, {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': 'attachment; filename="parking-report.xlsx"',
+      'Content-Disposition': 'attachment; filename="parking.xlsx"',
     });
   }
 
