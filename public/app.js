@@ -668,7 +668,7 @@ function askFeePw(error = '') {
   });
 }
 
-async function fetchFees(pw) {
+function feeParams() {
   const p = new URLSearchParams();
   const f = $('#feeFrom').value, t = $('#feeTo').value;
   if (f) p.set('from', dayStartIso(f));
@@ -676,8 +676,38 @@ async function fetchFees(pw) {
   p.set('rate', $('#feeRate').value || '15');
   p.set('free', $('#feeFree').value || '15');
   p.set('tzo', String(-new Date().getTimezoneOffset()));
-  return api(`/api/fees?${p}`, { headers: { 'X-Fee-Password': pw } });
+  return p;
 }
+async function fetchFees(pw) {
+  return api(`/api/fees?${feeParams()}`, { headers: { 'X-Fee-Password': pw } });
+}
+
+// 匯出 Excel 收入報表（每日統計＋停車明細），用目前選的日期和費率
+$('#feeXlsx').addEventListener('click', async () => {
+  const btn = $('#feeXlsx');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '產生中…';
+  try {
+    const res = await fetch(`/api/report.xlsx?${feeParams()}`, { headers: { 'X-App-Password': password, 'X-Fee-Password': feePw } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `錯誤 ${res.status}`);
+    const blob = await res.blob();
+    const f = $('#feeFrom').value, t = $('#feeTo').value;
+    const name = `停車收入報表${f ? `_${f}` : ''}${t && t !== f ? `_${t}` : ''}.xlsx`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  } catch (e) {
+    alert(`匯出失敗：${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
 
 const money = (n) => `$${Number(n).toLocaleString('zh-TW')}`;
 let feeLoading = 0;
